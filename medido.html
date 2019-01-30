@@ -5,14 +5,14 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<meta charset="UTF-8">
 	<link href="medido.css"  rel="stylesheet">
-	<script src="utils.js"></script>
+	<script src="utils.js.gz"></script>
     </head>
     <body>
 	<div class="container">
 	    
-	    <div class="title-text hcenter">
+	    <!--<div class="title-text hcenter">
 		MedidoPump
-	    </div>
+	    </div> -->
 	    
 	    <div id="gaugediv" class="hcenter section">
 		<canvas id="pressGauge"></canvas>
@@ -21,7 +21,7 @@
 	    
 	    <div class="hcenter section">
 		<div class="stacker plot-container">
-		    <canvas id="timeplot" width="360" height="120"></canvas>
+		    <canvas id="timeplot" width="360" height="100"></canvas>
 		    <div class="hsplay">
 			<span>Flow Rate: <span id="fuelFlowRate" class="readout">0</span> oz/min</span>
 			<span>Pressure: <span id ="fuelPressure" class="readout">0</span> psi</span>
@@ -30,15 +30,15 @@
 	    </div>
 
 	    <div class="hcenter section">
-		<div class="stacker pump-progress">
-		    <meter min="0" max="10" value="0" id="fuelMeter">meter</meter>
+		<!-- <div class="stacker pump-progress"> -->
+		    <!-- <meter min="0" max="10" value="0" id="fuelMeter">meter</meter> -->
 		    <div class="hcenter">
 			<div>
 			    Total Pumped:
 			    <span id="totalFuelFlow" class="readout">0</span> oz <button class="buttonClear"> Clear </button>
 			</div>
 		    </div>
-		</div>
+		<!-- </div> -->
 	    </div>
 
 
@@ -79,40 +79,39 @@
 		<div class="spacer"></div>
 	    </div>
 	    
-	    <div class="hcenter section" id="info">
-		<div class="spacer"></div>
-		
-		<div class="info-container">
-		    <div class="stacker">
-			Heap
-			<span id="heapSize">0</span>
-		    </div>
-		</div>
-		
-		<div class="spacer"></div>
-		
-		<div class="info-container">
-		    <div class="stacker">
-			<!-- Calibration (pulses/oz) -->
-			Calibration
-			<input type="number"name="calFactor" size="4" min="20" max="90" step="0.01"
-	    		       id="calID" value=""
-	    		       title="Enter calibration constant in pulses/oz" />
-		    </div>
-		</div>	
-		
-		<div class="spacer"></div>
-		
-		<div class="info-container">
-		    <div class="stacker">
-			Abc Parameter
-			<input type="number" size="4"
-	    		       name="abcFactor" id="abcID" value=""
-	    		       title="Enter abc" />
-		    </div>
-		</div>
-		<div class="spacer"></div>
-	    </div>
+	    <!-- <div class="hcenter section" id="info">
+		 <div class="spacer"></div>
+
+		 <div class="info-container">
+		 <div class="stacker">
+		 Heap
+		 <span id="heapSize">0</span>
+		 </div>
+		 </div>
+		 
+		 <div class="spacer"></div>
+		 
+		 <div class="info-container">
+		 <div class="stacker">
+		 Calibration
+		 <input type="number"name="calFactor" size="4" min="20" max="90" step="0.01"
+	    	 id="calID" value=""
+	    	 title="Enter calibration constant in pulses/oz" />
+		 </div>
+		 </div>	
+		 
+		 <div class="spacer"></div>
+		 
+		 <div class="info-container">
+		 <div class="stacker">
+		 Abc Parameter
+		 <input type="number" size="4"
+	    	 name="abcFactor" id="abcID" value=""
+	    	 title="Enter abc" />
+		 </div>
+		 </div>
+		 <div class="spacer"></div> 
+		 </div> --> 
 	</div>
 	<script src="medido.js"></script>
     </body>

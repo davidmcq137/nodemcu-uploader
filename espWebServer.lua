@@ -31,6 +31,7 @@ fileHeader = {
    length="Content-length: ",
    alive="Keep-Alive: Timeout=",
    server="Server: ",
+   encoding="Content-Encoding: ",
 }
 
 local mimeType
@@ -40,6 +41,7 @@ mimeType = {
    js   = "text/javascript",
    ico  = "image/x-icon",
    mp3  = "audio/mpeg",
+   gz   = "text/javascript" -- kludge for now, only compress js
 }
 
 local stringHeader
@@ -82,41 +84,56 @@ function sndFileCB(sock)
    if ll then sock:send(ll) else
       local fn = sockDrawer[sock].fileName
       local ls = sockDrawer[sock].loadStart   
-      print("File loaded, time (ms):", fn, (tmr.now()-ls)/1000.)
-      print("closing", fp)
       fp:close()
       sock:close()
       sockDrawer[sock] = nil
       isk = isk - 1
-      print("isk:", isk)
+      print("File loaded, time (ms):", fn, (tmr.now()-ls)/1000., isk)
+      for k,v in pairs(sockDrawer) do
+	 if v.filePointer == 0 then
+	    fp = file.open(v.fileName, "r")
+	    if not fp then
+	       print("panic: fp nil")
+	       return
+	    end
+	    sockDrawer[k].filePointer=fp
+	    k:on("sent", sndFileCB)
+	    k:send(v.filePrefix)
+	    break
+	 end
+      end
       collectgarbage()
    end
 end
 
-function buildHttpHeader(size, mime)
+function buildHttpHeader(size, mime, enc)
    local crlf = "\r\n"
    local ch = fileHeader.http.."200 OK"
    local cl = string.format(fileHeader.length.."%d", size)
    local ct = fileHeader.type..mime
    local ck = fileHeader.alive.."15"
    local cs = fileHeader.server.."ESP8266"
-   return ch..crlf..ct..crlf..cl..crlf..ck..crlf..cs..crlf..crlf
+   local ce = fileHeader.encoding..enc
+   return ch..crlf..ct..crlf..cl..crlf..ck..crlf..cs..crlf..ce..crlf..crlf
 end
 
 
-function sendFile(fn, mimetype, sock)
+function sendFile(fn, mimetype, sock, enc)
    local fs = file.stat(fn)
    if not fs then return nil end
-   local fp = file.open(fn, "r")
-   if not fp then return nil end
-   print("opening", fp)
-   local pp = buildHttpHeader(fs.size, mimetype)
-   --print("http header:", pp)
-   sockDrawer[sock] = {fileName=fn, filePointer=fp, filePrefix=pp, loadStart=tmr.now()}
+   local pp = buildHttpHeader(fs.size, mimetype, enc)
+   if isk > 0 then
+      fp = 0
+   else
+      fp = file.open(fn, "r")
+      if not fp then return nil end
+   end
    isk = isk + 1
-   print("isk:", isk)
-   sock:on("sent", sndFileCB)
-   sock:send(sockDrawer[sock].filePrefix)
+   sockDrawer[sock] = {fileName=fn, filePointer=fp, filePrefix=pp, loadStart=tmr.now()}
+   if fp ~= 0 then
+      sock:on("sent", sndFileCB)
+      sock:send(pp)
+   end
    return true
 end
 
@@ -131,11 +148,11 @@ function receiver(client,request)
       _, _, method, path = string.find(request, "([A-Z]+) (.+) HTTP");
    end
    --
-   --print("client", client)
-   --print("path", path)
-   --print("vars", vars)
-   --print("request",request)
-   --print("method", method)
+   -- print("client", client)
+   -- print("path", path)
+   -- print("vars", vars)
+   -- print("request",request)
+   -- print("method", method)
    
    local parsedVariables = {}
    if vars then
@@ -144,17 +161,18 @@ function receiver(client,request)
       end
    end
 
-   if path=="/" and vars then
+   if path=="/Poll" then
       local suffix
-      local nSocks = 0
-      for k, v in pairs(sockDrawer) do
-	 nSocks = nSocks + 1
-	 print("sock found:", k, v.fileName)
-      end
-      if nSocks > 0 then
-	 print("*** nSocks > 0 with a query string - ignoring")
-	 return
-      end
+      -- local nSocks = 0		
+      -- for k, v in pairs(sockDrawer) do
+      -- 	nSocks = nSocks + 1
+      -- 	 print("sock found:", k, v.fileName)
+      -- 	 print("vars:", vars)
+      -- end
+      -- if nSocks > 0 then
+      -- 	 print("*** nSocks > 0 with a query string - ignoring")
+      -- 	 return
+      -- end
       if cbFunction then
 	 suffix = cbFunction(parsedVariables)
       end
@@ -164,12 +182,16 @@ function receiver(client,request)
       return
    end
 
-   --local fileName = string.match(path, "[^/]+$")
-   local fileType = string.match(path, "[^.]+$")
-   local filePath = string.match(path, "/(.*)")
-
-   if filePath == '' then
+   local fileType, filePath
+   
+   if path == '/' then
       filePath = "index.html"
+      fileType = "html"
+   else
+      --print("else: path:", path)
+      --local fileName = string.match(path, "[^/]+$")
+      fileType = string.match(path, "[^.]+$")
+      filePath = string.match(path, "/(.*)")
    end
    
    local mime = mimeType[fileType]
@@ -182,9 +204,15 @@ function receiver(client,request)
    end
    --print("filePath:", filePath)
    --print("mime:", mime)
-   
+
+   local contEnc
    if file.exists(filePath) then
-      sendFile(filePath, mime, client)
+      if fileType == 'gz' then
+	 contEnc = "gzip"
+      else
+	 contEnc = "identity"
+      end
+      sendFile(filePath, mime, client, contEnc)
       return
    else
       sendStr="HTTP/1.1 204 No Content\r\n\r\n"

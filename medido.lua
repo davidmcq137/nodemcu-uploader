@@ -91,7 +91,7 @@ function timerCB()
 end
 
 saveTable={}
-
+seq=0
 function xhrCB(varTable)
    for k,v in pairs(varTable) do
       if saveTable[k] ~= v then   -- if there was a change
@@ -131,6 +131,11 @@ function xhrCB(varTable)
 	    gotCalFact = true
 	 end
       end
+   end
+   seq = seq + 1
+   if seq > 100 then
+      seq = 0
+      print("Heap:", node.heap())
    end
    local ippo = math.floor(pulsePerOz * 100 + 0.5)
    return string.format("%f,%f,%f,%f,%f,%f",

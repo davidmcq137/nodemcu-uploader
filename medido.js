@@ -17,8 +17,8 @@ var smoothieLine1;
 var smoothieLine2;
 //
 $(document).ready(function() {
-    smoothieSetup();
     pressSetup();
+    smoothieSetup();
     var ipAddr = location.host;
     var slider = document.getElementById("pumpSpeed");
     var sliderOutput = document.getElementById("pumpDisp");
@@ -145,7 +145,7 @@ $(document).ready(function() {
 	if (nTimeOut % 100 == 0) {
 	    timeOutAwake = false
 	}
-	console.log("***Polling Timeout*** Count: " + nTimeOut + timeOutAwake);
+	console.log("***Polling Timeout*** Count: " + nTimeOut + " Awake: " + timeOutAwake);
 	window.setTimeout(doPoll, pollLoopTime);
     }
     //
@@ -156,7 +156,8 @@ $(document).ready(function() {
 	    window.clearTimeout(timeOutID);
 	    timeOutAwake = true
 	}
-	var pumpURL = "http://" + ipAddr
+	console.log(ipAddr)
+	var pumpURL = "http://" + ipAddr + "/Poll"
 	var getURL = pumpURL + "?";
 	getURL = getURL + "pS=" + slider.value + "&";
 	getURL = getURL + "pB=" + pressB + "&";
@@ -167,6 +168,7 @@ $(document).ready(function() {
 	};
 	pressB = 0;
 	pressC = 0;
+	console.log(getURL);
 	oReq.open("GET", getURL);
 	//fire the missiles
 	oReq.send();
