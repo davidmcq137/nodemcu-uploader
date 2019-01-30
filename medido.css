@@ -13,7 +13,7 @@ html {
 .container {
     display: flex;
     flex-direction: column;
-
+    height: 92vh;
     justify-content: space-between;
 }
 
@@ -42,7 +42,7 @@ html {
 
 
 .title-text {
-    font-size: 40px;
+    font-size: 32px;
     font-weight: bold;
     font-style: italic;
     color: #3633ff;
@@ -145,7 +145,7 @@ hr {
 #gaugediv {
     /*! position: relative; */
     /*! width: 100%; */
-    background: #333333;
+    /* background: #333333; */
     height:120px;
 }
 

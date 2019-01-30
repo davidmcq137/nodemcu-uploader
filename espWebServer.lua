@@ -41,7 +41,6 @@ mimeType = {
    js   = "text/javascript",
    ico  = "image/x-icon",
    mp3  = "audio/mpeg",
-   gz   = "text/javascript" -- kludge for now, only compress js
 }
 
 local stringHeader
@@ -83,12 +82,22 @@ function sndFileCB(sock)
    local ll = fp:read(bufsize)
    if ll then sock:send(ll) else
       local fn = sockDrawer[sock].fileName
-      local ls = sockDrawer[sock].loadStart   
+      local ls = sockDrawer[sock].loadStart
+      --print("CB closes:", fn)
+      sockDrawer[sock] = nil
       fp:close()
       sock:close()
-      sockDrawer[sock] = nil
       isk = isk - 1
       print("File loaded, time (ms):", fn, (tmr.now()-ls)/1000., isk)
+      -- local iii=0
+      -- for k,v in pairs(sockDrawer) do
+      -- 	 iii = iii + 1
+      -- 	 print("Entry:", iii)
+      -- 	 print("sD{} key:", k)
+      -- 	 print("sD{}.fileName", v.fileName)
+      -- 	 print("sD{}.filePointer", v.filePointer)
+      -- 	 print("sD{}.file.loadStart", v.loadStart)	 
+      -- end
       for k,v in pairs(sockDrawer) do
 	 if v.filePointer == 0 then
 	    fp = file.open(v.fileName, "r")
@@ -96,7 +105,7 @@ function sndFileCB(sock)
 	       print("panic: fp nil")
 	       return
 	    end
-	    sockDrawer[k].filePointer=fp
+	    v.filePointer=fp
 	    k:on("sent", sndFileCB)
 	    k:send(v.filePrefix)
 	    break
@@ -163,16 +172,6 @@ function receiver(client,request)
 
    if path=="/Poll" then
       local suffix
-      -- local nSocks = 0		
-      -- for k, v in pairs(sockDrawer) do
-      -- 	nSocks = nSocks + 1
-      -- 	 print("sock found:", k, v.fileName)
-      -- 	 print("vars:", vars)
-      -- end
-      -- if nSocks > 0 then
-      -- 	 print("*** nSocks > 0 with a query string - ignoring")
-      -- 	 return
-      -- end
       if cbFunction then
 	 suffix = cbFunction(parsedVariables)
       end
@@ -182,37 +181,38 @@ function receiver(client,request)
       return
    end
 
-   local fileType, filePath
+   local fileType, filePath, fileName
    
    if path == '/' then
       filePath = "index.html"
       fileType = "html"
    else
-      --print("else: path:", path)
-      --local fileName = string.match(path, "[^/]+$")
+      fileName = string.match(path, "[^/]+$")
       fileType = string.match(path, "[^.]+$")
       filePath = string.match(path, "/(.*)")
    end
+
+   print("path, filePath:", path, filePath)
    
    local mime = mimeType[fileType]
 
    if not mime then
-      mime = "text/html"
+      mime = "text/html" -- dunno
       if path ~= '/' then
-	 print("No mime type for filetype ", fileType)
+	 print("No mime type for fileType ", fileType)
       end
    end
-   --print("filePath:", filePath)
-   --print("mime:", mime)
 
-   local contEnc
-   if file.exists(filePath) then
-      if fileType == 'gz' then
-	 contEnc = "gzip"
-      else
-	 contEnc = "identity"
-      end
-      sendFile(filePath, mime, client, contEnc)
+   local contEnc = nil
+   local sendPath = filePath..".gz"
+   if file.exists(sendPath) then
+      contEnc = "gzip"
+   elseif file.exists(filePath) then
+      contEnc = "identity"
+      sendPath = filePath
+   end
+   if contEnc then
+      sendFile(sendPath, mime, client, contEnc)
       return
    else
       sendStr="HTTP/1.1 204 No Content\r\n\r\n"
