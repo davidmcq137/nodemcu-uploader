@@ -23,7 +23,7 @@ local minPWM = 50
 local maxPWM = 1023
 local lastPWM = 0
 local pumpPWM = 0
-
+local pressPSI = 0
 local pumpFwd=true
 
 local pumpStartTime = 0
@@ -138,7 +138,7 @@ function xhrCB(varTable)
 end
 
 local ip=wifi.sta.getip()
-local bs=1024
+local bs=512
 server.setAjaxCB(xhrCB)
 server.start(80, bs)
 print("Starting web server on port 80, buffer size:", bs)

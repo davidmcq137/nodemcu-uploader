@@ -89,6 +89,7 @@ function sndFileCB(sock)
       sockDrawer[sock] = nil
       isk = isk - 1
       print("isk:", isk)
+      collectgarbage()
    end
 end
 
@@ -145,6 +146,15 @@ function receiver(client,request)
 
    if path=="/" and vars then
       local suffix
+      local nSocks = 0
+      for k, v in pairs(sockDrawer) do
+	 nSocks = nSocks + 1
+	 print("sock found:", k, v.fileName)
+      end
+      if nSocks > 0 then
+	 print("*** nSocks > 0 with a query string - ignoring")
+	 return
+      end
       if cbFunction then
 	 suffix = cbFunction(parsedVariables)
       end
