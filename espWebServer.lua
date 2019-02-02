@@ -170,8 +170,10 @@ function receiver(client,request)
       end
    end
 
+   local sendStr
+   
    if path=="/Poll" then
-      local suffix
+      local prefix, suffix
       if cbFunction then
 	 suffix = cbFunction(parsedVariables)
       end

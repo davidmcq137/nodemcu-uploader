@@ -9,7 +9,6 @@ server = require "espWebServer"
 local flowDirPin   = 3 --GPIO0
 local flowMeterPin = 7 --GPIO13
 local pwmPumpPin   = 8 --GPIOxx
-
 local pulseCount=0
 local flowRate=0
 local lastPulseCount=0
@@ -17,7 +16,6 @@ local lastFlowTime=0
 local pulsePerOz=77.6
 local pressZero
 local pressScale=3.75
-local pressPSI
 local adcDiv=5.7 -- resistive divider in front of adc   
 local minPWM = 50
 local maxPWM = 1023
@@ -30,7 +28,6 @@ local pumpStartTime = 0
 local pumpStopTime = 0
 local runningTime = 0
 
-local pulseCount = 0
 local flowCount  = 0
 
 local gotCalFact = false
@@ -90,13 +87,14 @@ function timerCB()
    tmr.start(pumpTimer)
 end
 
-saveTable={}
-seq=0
+local saveTable={}
+local seq=0
+
 function xhrCB(varTable)
    for k,v in pairs(varTable) do
       if saveTable[k] ~= v then   -- if there was a change
 	 saveTable[k] = v
-	 local kk
+	 local kk, idx
 	 if (not gotCalFact) and (k ~= "cF" and tonumber(v) ~= 0) then
 	    print("Attempt to command before calFact - rejected:", k, v)
 	    kk = nil
@@ -142,31 +140,35 @@ function xhrCB(varTable)
 			node.heap(),flowCount,flowRate,runningTime,ippo,pressPSI)
 end
 
-local ip=wifi.sta.getip()
-local bs=512
-server.setAjaxCB(xhrCB)
-server.start(80, bs)
-print("Starting web server on port 80, buffer size:", bs)
-print("IP Address: ", ip)
-
-setPumpSpeed(0)
-setPumpFwd()
-pwm.setup (pwmPumpPin,   1000, 0)
-
-pressZero = adcDiv * adc.read(0) / 1023
-
-for i=1,50,1 do
-   pressZero = pressZero - (pressZero - adcDiv * adc.read(0) / 1023)/10
+function medido()
+   local ip=wifi.sta.getip()
+   local bs=1024
+   print("Starting heap:", node.heap())
+   server.setAjaxCB(xhrCB)
+   server.start(80, bs)
+   print("Starting web server on port 80, buffer size:", bs)
+   print("IP Address: ", ip)
+   
+   setPumpSpeed(0)
+   setPumpFwd()
+   pwm.setup (pwmPumpPin,   1000, 0)
+   
+   pressZero = adcDiv * adc.read(0) / 1023
+   
+   for i=1,50,1 do
+      pressZero = pressZero - (pressZero - adcDiv * adc.read(0) / 1023)/10
+   end
+   
+   print("pressZero:", pressZero)
+   
+   gpio.mode (flowDirPin,   gpio.OUTPUT)
+   gpio.write(flowDirPin,   gpio.LOW)
+   
+   gpio.mode (flowMeterPin, gpio.INT)
+   gpio.trig (flowMeterPin, "up", gpioCB)
+   
+   pumpTimer=tmr.create()
+   tmr.register(pumpTimer, 200, tmr.ALARM_SEMI, timerCB)
+   tmr.start(pumpTimer)
+   print("End of main - heap:", node.heap())
 end
-
-print("pressZero:", pressZero)
-
-gpio.mode (flowDirPin,   gpio.OUTPUT)
-gpio.write(flowDirPin,   gpio.LOW)
-
-gpio.mode (flowMeterPin, gpio.INT)
-gpio.trig (flowMeterPin, "up", gpioCB)
-
-pumpTimer=tmr.create()
-tmr.register(pumpTimer, 200, tmr.ALARM_SEMI, timerCB)
-tmr.start(pumpTimer)

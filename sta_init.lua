@@ -1,8 +1,8 @@
 function ipcallback(T)
    print("\n\tCallback: STA - GOT IP".."\n\tStation IP: "..T.IP.."\n\tSubnet mask: "..
 	    T.netmask.."\n\tGateway IP: "..T.gateway)
-   --print("about to dofile('s.lua')")
-   --dofile("s.lua")
+   print("calling start.lua")
+   dofile("start.lua")
 end
 
 print('init.lua for WiFi Station')
@@ -15,7 +15,7 @@ print('heap: ',node.heap())
 wifi.eventmon.register(wifi.eventmon.STA_GOT_IP, ipcallback)
 
 -- wifi config start
-config_tbl={}
+local config_tbl={}
 config_tbl.ssid="Mt McQueeney Guest"
 config_tbl.pwd="south18ln"
 config_tbl.save=true
