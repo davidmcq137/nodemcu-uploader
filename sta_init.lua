@@ -1,8 +1,8 @@
-function ipcallback(T)
+function wifiIPcallback(T)
    print("\n\tCallback: STA - GOT IP".."\n\tStation IP: "..T.IP.."\n\tSubnet mask: "..
 	    T.netmask.."\n\tGateway IP: "..T.gateway)
    print("calling start.lua")
-   dofile("start.lua")
+   tmr.alarm(0, 100, tmr.ALARM_SINGLE, function() dofile("start.lua") end)
 end
 
 print('init.lua for WiFi Station')
@@ -12,7 +12,7 @@ print('MAC: ',wifi.sta.getmac())
 print('chip: ',node.chipid())
 print('heap: ',node.heap())
 
-wifi.eventmon.register(wifi.eventmon.STA_GOT_IP, ipcallback)
+wifi.eventmon.register(wifi.eventmon.STA_GOT_IP, wifiIPcallback)
 
 -- wifi config start
 local config_tbl={}

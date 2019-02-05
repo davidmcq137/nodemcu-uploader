@@ -1,7 +1,15 @@
-if node.flashindex() == nil then 
-  node.flashreload('lfs.img') 
+print("in init.lua")
+print("flashindex:", node.flashindex())
+flashFile="lfs.img"
+if not file.exists(flashFile) then
+   print("Cannot find "..flashFile)
+   return
 end
-print("about to timer")
+
+if node.flashindex() == nil then 
+   print("it's nil!")
+   node.flashreload('lfs.img') 
+end
 tmr.alarm(0, 5000, tmr.ALARM_SINGLE, 
 	  function()
 	     dofile("_init.lua")

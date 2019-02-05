@@ -147,11 +147,17 @@ function sendFile(fn, mimetype, sock, enc)
 end
 
 function sendOneString(str, sock)
+   if type(sock) == 'function' then
+      print('sock type was function')
+   end
    sock:on("sent", sndStrCB)
    sock:send(str)
 end
 
 function receiver(client,request)
+
+   if not medidoEnabled then return end
+   
    local _, _, method, path, vars = string.find(request, "([A-Z]+) (.+)?(.+) HTTP");
    if not method then
       _, _, method, path = string.find(request, "([A-Z]+) (.+) HTTP");

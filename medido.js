@@ -7,7 +7,7 @@ var Utime;
 var timeOutID=null;
 var nTimeOut=0;
 var pollAwake = false;
-const pollLoopTime=250;
+const pollLoopTime=350;
 const fastTimeOut=3*pollLoopTime;
 const slowTimeOut=6*fastTimeOut;
 var flowGauge;
@@ -130,6 +130,14 @@ $(document).ready(function() {
 	pressGauge.set(pressPSI)
 	$('#fuelPressure').html(pressPSI)
 	//
+	// elem[6]: pumpPWM (0-1023)
+	//
+	var pumpPWM = Number(elems[6]);
+	var pSpeed = 100 * pumpPWM / 1023;
+	pSpeed = pSpeed.toFixed();
+	console.log(pumpPWM, pSpeed);
+	$('#pumpRunSpeed').html(pSpeed);
+	//
 	// Reset next poll
 	//
 	var Utime=new Date();
@@ -156,7 +164,7 @@ $(document).ready(function() {
 	    window.clearTimeout(timeOutID);
 	    timeOutAwake = true
 	}
-	console.log(ipAddr)
+	//console.log(ipAddr)
 	var pumpURL = "http://" + ipAddr + "/Poll"
 	var getURL = pumpURL + "?";
 	getURL = getURL + "pS=" + slider.value + "&";
@@ -168,7 +176,7 @@ $(document).ready(function() {
 	};
 	pressB = 0;
 	pressC = 0;
-	console.log(getURL);
+	//console.log(getURL);
 	oReq.open("GET", getURL);
 	//fire the missiles
 	oReq.send();
