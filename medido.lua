@@ -10,11 +10,13 @@ server = require "espWebServer"
 -- globals seen by all subsystems
 
 medidoEnabled = true 
-pressLimit = 15
-PIDpGain = 0
-PIDiGain = 0
+PIDpGain = 1
+PIDiGain = 10
 PIDpTerm = 0
 PIDiTerm = 0
+MINpress = 0
+MAXpress = 15
+pressLimit = (MAXpress + MINpress)/2
 
 -- end globals
 
@@ -41,8 +43,9 @@ local saveSetSpeed = 0
 local pumpStartTime = 0
 local pumpStopTime = 0
 local runningTime = 0
-
 local flowCount  = 0
+local pumpTimer
+local watchTimer
 
 local gotCalFact = false
 
@@ -72,7 +75,6 @@ function init_i2c_display()
    
    i2c.setup(0, sda, scl, i2c.SLOW)
    disp = u8g2.ssd1306_i2c_128x64_noname(0, sla)
-   print("disp ret:", disp)
    disp:setFontRefHeightExtendedText()
    disp:setDrawColor(1)
    disp:setFontPosTop()
@@ -95,13 +97,11 @@ end
 
 function lineLCD(line, txt, val, fmt, sfx)
    if not line then
-      print("clearing textLCD")
       for i = 1, 4, 1 do
 	 textLCD[i]=nil
       end
       return
    end
-   print("lineLCD: line, val", line, val)
    if not val then
       textLCD[line] = txt
    else
@@ -158,6 +158,10 @@ local function setPumpRev()
    print("Rev")
 end
 
+local function watchDog(T)
+   print("***watchDog***", T)
+end
+
 local seq=0
 local dt
 
@@ -165,6 +169,7 @@ function timerCB()
    local pSpd, errsig
    local now = tmr.now()
    local deltaT = math.abs(math.abs(now) - math.abs(lastFlowTime)) / (1000000. * 60.) -- mins
+   tmr.stop(watchTimer)
    lastFlowTime = now
    flowCount = pulseCount / pulsePerOz
    local deltaF = (pulseCount - lastPulseCount) / pulsePerOz
@@ -190,8 +195,12 @@ function timerCB()
    end
    
    if medidoEnabled then
+      watchTimer=tmr.create()
+      tmr.register(watchTimer, 2000, tmr.ALARM_SINGLE, watchDog)
+      tmr.start(watchTimer)
       tmr.start(pumpTimer)
    end
+   
    dt = (tmr.now() - now) / 1000
    
 end
@@ -268,9 +277,14 @@ function xhrCB(varTable)
 	       showLCD()
 	    end
 	 elseif kk == "cF" then
-	    print("calFact passed in:", tonumber(v))
+	    --print("calFact passed in:", tonumber(v))
 	    pulsePerOz = tonumber(v)/100
 	    gotCalFact = true
+	 elseif kk == "pL" then
+	    pressLimit = tonumber(v/10)
+	    pressLimit = math.max(MINpress, math.min(pressLimit, MAXpress))
+	    --print("pL =", pressLimit, v)
+
 	 end
       end
    end
@@ -282,7 +296,7 @@ function xhrCB(varTable)
    seq = seq + 1
    if seq > 100 then
       seq = 0
-      print("Heap, dt(ms):", node.heap(), dt)
+      --print("Heap, dt(ms):", node.heap(), dt)
    end
 
    local ippo = math.floor(pulsePerOz * 100 + 0.5)
@@ -293,12 +307,12 @@ end
 
 local ip=wifi.sta.getip()
 local bs=1024
-print("Starting heap:", node.heap())
 server.setAjaxCB(xhrCB)
 server.start(80, bs)
 print("Starting web server on port 80, buffer size:", bs)
 print("IP Address: ", ip)
 
+saveTable["pS"] = "0" -- so it won't call setPumpSpeed on init and clear the splash screen
 setPumpSpeed(0)
 setPumpFwd()
 pwm.setup (pwmPumpPin,   1000, 0)
@@ -326,6 +340,8 @@ gpio.trig (flowMeterPin, "up", gpioCB)
 pumpTimer=tmr.create()
 tmr.register(pumpTimer, 200, tmr.ALARM_SEMI, timerCB)
 tmr.start(pumpTimer)
-print("End of main - heap:", node.heap())
 
+watchTimer=tmr.create()
+tmr.register(watchTimer, 2000, tmr.ALARM_SINGLE, watchDog)
+tmr.start(watchTimer)
 

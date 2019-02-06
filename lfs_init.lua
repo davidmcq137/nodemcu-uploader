@@ -1,5 +1,5 @@
-print("in init.lua")
-print("flashindex:", node.flashindex())
+print("init.lua")
+print("fi:", node.flashindex())
 flashFile="lfs.img"
 if not file.exists(flashFile) then
    print("Cannot find "..flashFile)
@@ -7,8 +7,8 @@ if not file.exists(flashFile) then
 end
 
 if node.flashindex() == nil then 
-   print("it's nil!")
-   node.flashreload('lfs.img') 
+   print("flashindex is nil, reloading .."..flashFile)
+   node.flashreload(flashFile) 
 end
 tmr.alarm(0, 5000, tmr.ALARM_SINGLE, 
 	  function()

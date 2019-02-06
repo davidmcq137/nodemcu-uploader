@@ -15,6 +15,8 @@ var pressGauge;
 var smoothie;
 var smoothieLine1;
 var smoothieLine2;
+var timeOutAwake=true;
+var slowSlider=0
 //
 $(document).ready(function() {
     pressSetup();
@@ -25,6 +27,13 @@ $(document).ready(function() {
     slider.oninput = function() {
 	sliderOutput.innerHTML = this.value;
     }
+    var pressLQ = 7.5; // default 7.5 psi (halfscale)
+    $("#pressureLimit").on('input', function () {
+	pressLQ = $("#pressureLimit").val();
+	pressLQ = pressLQ/10;
+	console.log("pressLQ: " + pressLQ); 
+	$("#pressureDisp").html(pressLQ);
+    });
     var pressB=0;
     var lastB=2;
     $("#abcID").change(function(){
@@ -135,7 +144,7 @@ $(document).ready(function() {
 	var pumpPWM = Number(elems[6]);
 	var pSpeed = 100 * pumpPWM / 1023;
 	pSpeed = pSpeed.toFixed();
-	console.log(pumpPWM, pSpeed);
+	//console.log(pumpPWM, pSpeed);
 	$('#pumpRunSpeed').html(pSpeed);
 	//
 	// Reset next poll
@@ -143,7 +152,7 @@ $(document).ready(function() {
 	var Utime=new Date();
 	//console.log(Utime.getTime(), pressPSI);
 	smoothieLine1.append(Utime.getTime(), pressPSI);
-	smoothieLine2.append(Utime.getTime(), fuelModulo);
+	smoothieLine2.append(Utime.getTime(), flowRstr/12+5);
 	//
 	window.setTimeout(doPoll, pollLoopTime);
     };
@@ -165,11 +174,14 @@ $(document).ready(function() {
 	    timeOutAwake = true
 	}
 	//console.log(ipAddr)
+	slowSlider = slowSlider - (slowSlider - slider.value)/2;
+	slowSlider = slowSlider.toFixed()
 	var pumpURL = "http://" + ipAddr + "/Poll"
 	var getURL = pumpURL + "?";
-	getURL = getURL + "pS=" + slider.value + "&";
+	getURL = getURL + "pS=" + slowSlider + "&";
 	getURL = getURL + "pB=" + pressB + "&";
-	getURL = getURL + "pC=" + pressC;
+	getURL = getURL + "pC=" + pressC + "&";
+	getURL = getURL + "pL=" + pressLQ*10;
 	var temp = Math.floor(calFact * 100 + 0.5)
 	if (calFact !== 0) {
 	    getURL = getURL + "&cF=" + temp;
@@ -206,17 +218,17 @@ $(document).ready(function() {
 	    {grid:
 	     {fillStyle:'#d9d9d9', sharpLines:true, millisPerLine:10000*2},
 	     labels:
-	     {fillStyle: '#000000', precision: 0},
-	     timestampFormatter:SmoothieChart.timeFormatter,
+	     {fillStyle: '#d9d9d9', precision: 0},
+	     //timestampFormatter:SmoothieChart.timeFormatter,
 	     millisPerPixel:266, minValue: -.4, maxValue: 10.4})
 	var smoothieCanvas=document.getElementById("timeplot");
 	smoothieLine1 = new TimeSeries();
 	smoothieLine2 = new TimeSeries();
 	smoothie.streamTo(smoothieCanvas,250)
 	smoothie.addTimeSeries(smoothieLine1,
-			       {lineWidth: 2, strokeStyle: '#00FF00', fillStyle:'#ccffcc'});
+			       {lineWidth: 2, strokeStyle: '#009900', fillstyle:'#ccffcc'});
 	smoothie.addTimeSeries(smoothieLine2,
-			       {lineWidth: 2, strokeStyle: '#0000FF'});
+			       {lineWidth: 2, strokeStyle: '#0000FF', fillstyle:'#000099'});
     }
     function pressSetup(){
 	//
@@ -251,9 +263,9 @@ $(document).ready(function() {
 	    strokeColor: '#E0E0E0',  // to see which ones work best for you
 	    fontSize: 30,
 	    staticZones: [
-		{strokeStyle: "#FFCC00", min: -60, max: -2}, // 
+		{strokeStyle: "#3633ff", min: -60, max: -2}, // 
 		{strokeStyle: "#e0e0e0", min: -2,  max: 2},  // Grey near zero
-		{strokeStyle: "#0400FF", min: 2,   max: 60}, // 
+		{strokeStyle: "#3633ff", min: 2,   max: 60}, // 
 	    ],
 	};
 	var pressOpts = {
@@ -261,7 +273,7 @@ $(document).ready(function() {
 	    lineWidth: 0.15, // The line thickness
 	    radiusScale: .5, // Relative radius
 	    pointer: {
-		length: 0.50, // // Relative to gauge radius
+		length: 0.0, //0.50, // // Relative to gauge radius
 		strokeWidth: 0.035, // The thickness
 		color: '#000000' // Fill color
 	    },
@@ -279,7 +291,7 @@ $(document).ready(function() {
 	    colorStop: '#0039e6',    // just experiment with them
 	    strokeColor: '#E0E0E0',  // to see which ones work best for you
 	    //fontSize: 30,
-	    percentColors: [[0.0, "#00FF00" ], [1.0, "#FF0000"]],
+	    percentColors: [[0.0, "#009900" ], [1.0, "#009900"]],
 	    strokeColor: '#E0E0E0',
 	    //staticZones: [
 	    //{strokeStyle: "#00FF00", min: 0, max: 2}, // 
@@ -332,7 +344,7 @@ function test() {
     Utime = new Date();
     //console.log(Utime.getTime(), TpressPSI);
     smoothieLine1.append(Utime.getTime(), TpressPSI);
-    smoothieLine2.append(Utime.getTime(), TfuelModulo);
+    smoothieLine2.append(Utime.getTime(), TflowRstr/12+5);
     if (Ttime <= 40) {
 	setTimeout(test, pollLoopTime)
     }

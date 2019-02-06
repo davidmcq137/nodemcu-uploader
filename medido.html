@@ -21,11 +21,11 @@
 	    
 	    <div class="hcenter section">
 		<div class="stacker plot-container">
-		    <canvas id="timeplot" width="360" height="100"></canvas>
 		    <div class="hsplay">
-			<span>Flow Rate: <span id="fuelFlowRate" class="readout">0</span> oz/min</span>
-			<span>Pressure: <span id ="fuelPressure" class="readout">0</span> psi</span>
+			<span>Flow: <span class="bluedot"></span><span id="fuelFlowRate" class="readout readoutS">0</span> oz/min</span>
+			<span>Press: <span class="bluedot reddot"></span><span id ="fuelPressure" class="readout readoutS">0</span> psi</span>
 		    </div>
+		    <canvas id="timeplot" width="360" height="100"></canvas>
 		</div>
 	    </div>
 
@@ -81,6 +81,16 @@
 			<span>Pump Speed: <span id="pumpRunSpeed" class="readout">0</span>%</span>
 			<span>Heap: <span id="heapSize" class="readout">0</span> bytes</span>
 		    </div>
+		</div>
+	    </div>
+	    <div class="stacker">
+		<div class="hcenter">
+		    <input type="range" min="0" max="150" class="slider sliderP" value="75" id="pressureLimit">
+		</div>
+		<div style="height:20px"></div>
+		<div class="hcenter">
+		    <span>Pressure Limit:
+		    <span id="pressureDisp" class="readout">7.5</span> psi</span>
 		</div>
 	    </div>
 	</div>

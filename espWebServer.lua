@@ -76,14 +76,21 @@ function sndStrCB(sock)
 end
 
 local isk=0
+local sendTimer
 
 function sndFileCB(sock)
+   --print("in sndFileCB - ", tmr.state(sendTimer) )
+   local running, tmode = tmr.state(sendTimer)
+   if not running or tmode ~= 0 then
+      print("bad tmr.state()", running, tmode)
+   end
    local fp = sockDrawer[sock].filePointer
    local ll = fp:read(bufsize)
    if ll then sock:send(ll) else
       local fn = sockDrawer[sock].fileName
       local ls = sockDrawer[sock].loadStart
       --print("CB closes:", fn)
+      tmr.stop(sendTimer) -- kill watchdog
       sockDrawer[sock] = nil
       fp:close()
       sock:close()
@@ -107,6 +114,9 @@ function sndFileCB(sock)
 	    end
 	    v.filePointer=fp
 	    k:on("sent", sndFileCB)
+	    sendTimer=tmr.create()
+	    tmr.register(sendTimer, 5000, tmr.ALARM_SINGLE, watchDog)
+	    tmr.start(sendTimer)
 	    k:send(v.filePrefix)
 	    break
 	 end
@@ -126,6 +136,9 @@ function buildHttpHeader(size, mime, enc)
    return ch..crlf..ct..crlf..cl..crlf..ck..crlf..cs..crlf..ce..crlf..crlf
 end
 
+function watchDog(T)
+   print("*** watchdog executed ***", T)
+end
 
 function sendFile(fn, mimetype, sock, enc)
    local fs = file.stat(fn)
@@ -141,15 +154,16 @@ function sendFile(fn, mimetype, sock, enc)
    sockDrawer[sock] = {fileName=fn, filePointer=fp, filePrefix=pp, loadStart=tmr.now()}
    if fp ~= 0 then
       sock:on("sent", sndFileCB)
+      -- set up watchdog timer 5s
+      sendTimer=tmr.create()
+      tmr.register(sendTimer, 5000, tmr.ALARM_SINGLE, watchDog)
+      tmr.start(sendTimer)
       sock:send(pp)
    end
    return true
 end
 
 function sendOneString(str, sock)
-   if type(sock) == 'function' then
-      print('sock type was function')
-   end
    sock:on("sent", sndStrCB)
    sock:send(str)
 end
@@ -200,7 +214,7 @@ function receiver(client,request)
       filePath = string.match(path, "/(.*)")
    end
 
-   print("path, filePath:", path, filePath)
+   --print("path, filePath:", path, filePath)
    
    local mime = mimeType[fileType]
 

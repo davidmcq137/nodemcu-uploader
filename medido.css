@@ -13,7 +13,7 @@ html {
 .container {
     display: flex;
     flex-direction: column;
-    height: 92vh;
+    /* height: 92vh;*/
     justify-content: space-between;
 }
 
@@ -54,6 +54,9 @@ html {
     font-size: 20px;
 }
 
+.readoutS {
+    font-size: 16px;
+}
 .plot-container {
     width: 95%;
 }
@@ -114,6 +117,9 @@ html {
 }
 .slider:hover {
     opacity: 1;
+}
+.sliderP {
+    background: #008000
 }
 .slider::-webkit-slider-thumb {
     -webkit-appearance: none;
@@ -184,6 +190,21 @@ hr {
     display: flex;
     flex-direction: column;
 }
+
+.bluedot {
+    height: 15px;
+    width: 15px;
+    background-color: #3633ff;
+    border-radius: 50%;
+    display: inline-block;
+    margin: 0px 6px;
+}
+
+.reddot {
+    background-color: #009900;
+}
+
+
 
 #info input {
     width: 5em;
