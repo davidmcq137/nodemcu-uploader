@@ -220,7 +220,8 @@ $(document).ready(function() {
 	     labels:
 	     {fillStyle: '#d9d9d9', precision: 0},
 	     //timestampFormatter:SmoothieChart.timeFormatter,
-	     millisPerPixel:266, minValue: -.4, maxValue: 10.4})
+	     millisPerPixel:266, minValue: 0, maxValue: 10, interpolation:"Bezier"
+	    });
 	var smoothieCanvas=document.getElementById("timeplot");
 	smoothieLine1 = new TimeSeries();
 	smoothieLine2 = new TimeSeries();

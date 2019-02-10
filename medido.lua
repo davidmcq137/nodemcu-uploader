@@ -54,6 +54,8 @@ local dh=64
 
 function cdisp(font, text, x, y)
    local ww, xd
+   if not font return
+   if not text return
    disp:setFont(font)
    ww=disp:getStrWidth(text)
    if x == 0 then xd = dw/2 - ww/2 else xd = x end
@@ -310,7 +312,13 @@ local bs=1024
 server.setAjaxCB(xhrCB)
 server.start(80, bs)
 print("Starting web server on port 80, buffer size:", bs)
-print("IP Address: ", ip)
+if ip then
+   print("IP Address: ", ip)
+else
+   ip = "192.168.4.1"
+   print("AP Mode: "..ip)
+end
+
 
 saveTable["pS"] = "0" -- so it won't call setPumpSpeed on init and clear the splash screen
 setPumpSpeed(0)

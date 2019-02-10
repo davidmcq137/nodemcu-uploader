@@ -1,9 +1,7 @@
 function wifiIPcallback(T)
    print("\n\tCallback: STA - GOT IP".."\n\tStation IP: "..T.IP.."\n\tSubnet mask: "..
 	    T.netmask.."\n\tGateway IP: "..T.gateway)
-   print("calling start.lua")
-   tmr.alarm(0, 100, tmr.ALARM_SINGLE, function() dofile("start.lua") end)
-end
+  end
 --
 function wifiStaConn(T)
    print("\n\tAP - STATION CONNECTED".."\n\tMAC: "..T.MAC.."\n\tAID: "..T.AID)
@@ -30,4 +28,7 @@ config_tbl.pwd="12345678"
 config_tbl.save=false
 config_tbl.auth=wifi.WPA_WPA2_PSK
 print("config return:", wifi.ap.config(config_tbl))
+print("calling start.lua")
+tmr.alarm(0, 100, tmr.ALARM_SINGLE, function() dofile("start.lua") end)
+
 -- wifi config end
