@@ -5,7 +5,10 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<meta charset="UTF-8">
 	<link href="medido.css"  rel="stylesheet">
-	<script src="utils.js"></script>
+	<script src="zepto.min.js"></script>
+	<script src="smoothieMod.js"></script>
+	<script src="sprintf.js"></script>
+	<script src="gauge.min.js"></script>
     </head>
     <body>
 	<div class="container">
@@ -85,15 +88,15 @@
 	    </div>
 	    <div class="stacker">
 		<div class="hcenter">
-		    <input type="range" min="0" max="150" class="slider sliderP" value="75" id="pressureLimit">
+		    <input type="range" min="0" max="100" class="slider sliderP" value="50" id="pressureLimit">
 		</div>
 		<div style="height:20px"></div>
 		<div class="hcenter">
 		    <span>Pressure Limit:
-		    <span id="pressureDisp" class="readout">7.5</span> psi</span>
+		    <span id="pressureDisp" class="readout">5.0</span> psi</span>
 		</div>
 	    </div>
 	</div>
-	<script src="medido.js"></script>
+	<script <script src="medido.js"></script>
     </body>
 </html>

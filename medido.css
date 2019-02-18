@@ -28,24 +28,22 @@ html {
 }
 
 .section {
-    padding-top: 3vh;
-    padding-bottom: 2vh;
+    padding-top: 5vh;
+    padding-bottom: 5vh;
 }
 
 .section:nth-child(even) {
     background-color: #222;
 }
 
-.section:nth-child(even) {
-    /*background-color: tomato; */
-}
-
-
 .title-text {
     font-size: 32px;
     font-weight: bold;
     font-style: italic;
     color: #3633ff;
+}
+.subtitle-text {
+    font-size:20px;
 }
 
 .readout {

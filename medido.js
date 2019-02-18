@@ -16,7 +16,13 @@ var smoothie;
 var smoothieLine1;
 var smoothieLine2;
 var timeOutAwake=true;
-var slowSlider=0
+var slowSlider=0;
+var GG;
+var TTs;
+var TTa;
+var TTb;
+//
+// is all of this code REALLY inside ready fcn? need to fix that!
 //
 $(document).ready(function() {
     pressSetup();
@@ -112,7 +118,15 @@ $(document).ready(function() {
 	//
 	flowRstr = Math.floor(Number(Number(elems[2])) * 10) / 10.;
 	flowRstr = flowRstr.toFixed(1);
-	$("#fuelFlowRate").html(flowRstr)
+	// this code copied from test .. needs to be tested live for daisy behavior
+	GG = Math.abs(flowRstr/10);
+	GG = (GG - Math.trunc(GG))*10;
+	TTs = sprintf("%+06.2f", flowRstr);
+	var i=TTs.indexOf(".");
+	TTb=TTs.slice(0, i-1);
+	TTa=TTs.slice(i-1);
+	$("#fuelFlowRate").html(TTb+"<u>"+TTa+"</u>");
+	//$("#fuelFlowRate").html(flowRstr)
 	flowGauge.set(flowRstr)
 	//
 	// elem[3]: Running Time (secs)
@@ -152,7 +166,7 @@ $(document).ready(function() {
 	var Utime=new Date();
 	//console.log(Utime.getTime(), pressPSI);
 	smoothieLine1.append(Utime.getTime(), pressPSI);
-	smoothieLine2.append(Utime.getTime(), flowRstr/12+5);
+	smoothieLine2.append(Utime.getTime(), GG);
 	//
 	window.setTimeout(doPoll, pollLoopTime);
     };
@@ -220,7 +234,8 @@ $(document).ready(function() {
 	     labels:
 	     {fillStyle: '#d9d9d9', precision: 0},
 	     //timestampFormatter:SmoothieChart.timeFormatter,
-	     millisPerPixel:266, minValue: -.4, maxValue: 10.4})
+	     millisPerPixel:266, minValue: 0, maxValue: 10, interpolation:"BezierHazel"
+	    });
 	var smoothieCanvas=document.getElementById("timeplot");
 	smoothieLine1 = new TimeSeries();
 	smoothieLine2 = new TimeSeries();
@@ -311,7 +326,7 @@ $(document).ready(function() {
 	flowGauge.set(flowRstr); // set actual value
     }
 });
-//
+// //
 function test() {
     var TpressPSI;
     var TflowCstr;

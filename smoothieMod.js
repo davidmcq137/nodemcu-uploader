@@ -916,7 +916,7 @@
       // Draw the line...
       context.beginPath();
       // Retain lastX, lastY for calculating the control points of bezier curves.
-      var firstX = 0, firstY = 0, lastX = 0, lastY = 0;
+	var firstX = 0, firstY = 0, lastX = 0, lastY = 0, lastXd=0, lastYd=0;
       for (var i = 0; i < dataSet.length && dataSet.length !== 1; i++) {
         var x = timeToXPixel(dataSet[i][0]),
             y = valueToYPixel(dataSet[i][1]);
@@ -933,15 +933,52 @@
               context.lineTo(x,y);
 	      break;
             }
-	    case "Hazel": {
-	      if (Math.abs(lastY-y) > 0.5*dimensions.height) {
+	    //  
+          case "BezierHazel":{ // for "Hazel-style" wraparounds, lift the pen (0.3 is a kludge)
+	      if (Math.abs(lastY-y) > 0.30*dimensions.height) {
 		  context.moveTo(x,y)
 	      } else {
-		  context.lineTo(x,y)
+		  context.bezierCurveTo( // startPoint (A) is implicit from last iteration of loop
+                      Math.round((lastX + x) / 2), lastY, // controlPoint1 (P)
+                      Math.round((lastX + x)) / 2, y, // controlPoint2 (Q)
+                      x, y); // endPoint (B)
 	      }
-	    }
-	    //  
-            case "bezier":
+              break;
+	  }
+          case "Daisy":{ // for "Hazel-style" wraparounds, lift the pen (0.3 is a kludge)
+	      var xe = dimensions.height/300;
+	      var ye = dimensions.height/300;
+	      if (Math.abs(lastYd-y) + Math.abs(lastXd-x) > 1.1*(xe + ye)) {
+		  if (d == 1) {
+		      context.moveTo(x-xe,y+ye);
+		      context.lineTo(x+xe, y+ye);
+		      context.lineTo(x+xe, y-ye);
+		      context.lineTo(x-xe, y-ye);
+		      context.lineTo(x-xe, y+ye);
+		  } else {
+		      //context.moveTo(x-xe,y);
+		      //context.lineTo(x, y+ye);
+		      //context.lineTo(x+xe, y);
+		      //context.lineTo(x, y-ye);
+		      //context.lineTo(x-xe, y);
+		      //
+		      //context.moveTo(x-xe,y);
+		      //context.lineTo(x+xe, y);
+		      //context.lineTo(x, y);
+		      //context.lineTo(x, y-ye);
+		      //context.lineTo(x, y+ye);
+		      //
+		      context.fillStyle=context.strokeStyle;
+		      context.beginPath();
+		      context.ellipse(x,y,xe,ye,0,0,2*Math.PI);
+		      context.fill();
+		  }
+		  lastXd = x;
+		  lastYd = y;
+	      }
+              break;
+	  }
+	  case "Bezier":
             default: {
               // Great explanation of Bezier curves: http://en.wikipedia.org/wiki/Bezier_curve#Quadratic_curves
               //
@@ -957,15 +994,11 @@
               // Importantly, A and P are at the same y coordinate, as are B and Q. This is
               // so adjacent curves appear to flow as one.
               //
-	      if (Math.abs(lastY-y) > 0.25*dimensions.height) {
-		  context.moveTo(x,y)
-	      } else {
-		  context.bezierCurveTo( // startPoint (A) is implicit from last iteration of loop
-                      Math.round((lastX + x) / 2), lastY, // controlPoint1 (P)
-                      Math.round((lastX + x)) / 2, y, // controlPoint2 (Q)
-                      x, y); // endPoint (B)
-	      }
-              break;
+		context.bezierCurveTo( // startPoint (A) is implicit from last iteration of loop
+                    Math.round((lastX + x) / 2), lastY, // controlPoint1 (P)
+                    Math.round((lastX + x)) / 2, y, // controlPoint2 (Q)
+                    x, y); // endPoint (B)
+		break;
             }
             case "step": {
               context.lineTo(x,lastY);

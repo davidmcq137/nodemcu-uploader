@@ -238,7 +238,7 @@ function xhrCB(varTable)
 	    end
 	    lineLCD(2, "Set Spd", saveSetSpeed, "%d", "%")
 	    showLCD()
-	 elseif kk == "pB" then
+	 elseif kk == "pB" then -- pB is pump Button ... Empty/Off/Fill
 	    idx = tonumber(v)
 	    if idx == 0     then -- "Idle" (no command)
 	       --
@@ -315,7 +315,7 @@ print("Starting web server on port 80, buffer size:", bs)
 if ip then
    print("IP Address: ", ip)
 else
-   ip = "192.168.4.1"
+   ip = "192.168.4.1(ap)"
    print("AP Mode: "..ip)
 end
 
