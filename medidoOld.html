@@ -1,0 +1,99 @@
+<!DOCTYPE xhtml>
+<html lang="en-us">
+    <head>
+	<title>Medido Pump</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta charset="UTF-8">
+	<link href="medido.css"  rel="stylesheet">
+	<script src="utils.js"></script>
+    </head>
+    <body>
+	<div class="container">
+	    
+	    <div class="title-text hcenter">
+		MedidoPump
+	    </div>
+	    
+	    <div id="gaugediv" class="hcenter section">
+		<canvas id="pressGauge"></canvas>
+		<canvas id="flowGauge"></canvas>
+	    </div>
+	    
+	    <div class="hcenter section">
+		<div class="stacker plot-container">
+		    <div class="hsplay">
+			<span>Flow: <span class="bluedot"></span><span id="fuelFlowRate" class="readout readoutS">0</span> oz/min</span>
+			<span>Press: <span class="bluedot reddot"></span><span id ="fuelPressure" class="readout readoutS">0</span> psi</span>
+		    </div>
+		    <canvas id="timeplot" width="360" height="100"></canvas>
+		</div>
+	    </div>
+
+	    <div class="hcenter section">
+		<div class="hcenter">
+		    <div>
+			Total Pumped:
+			<span id="totalFuelFlow" class="readout">0</span> oz <button class="buttonClear"> Clear </button>
+		    </div>
+		</div>
+	    </div>
+
+	    <div class="stacker section">
+		<div class="hcenter">
+		    <input type="range" min="0" max="100" class="slider" value="0" id="pumpSpeed">
+		</div>
+		<div style="height:20px"></div>
+		<div class="hcenter">
+		    <div class="stacker">
+			<span>Pump Set Speed:</span>
+			<span class="hcenter">
+			    <span><span id="pumpDisp" class="readout">0</span> %</span>
+			</span>
+		    </div>
+		    <div class="stacker">
+			<span>Running Time:</span>
+			<span id="runningTime" class="readout hcenter">0</span>
+		    </div>
+		</div>
+	    </div>
+	    
+	    <div class="buttonsCenter hcenter section">
+		<div class="spacer"></div>
+		<div class="bottom-button">
+		    <button class="button buttonEmpty" id="Empty">Empty</button>
+		</div>
+		
+		<div class="spacer"></div>
+		<div class="bottom-button">
+		    
+		    <button class="button buttonOff"  id="Off"  >Off  </button>
+		</div>
+		<div class="spacer"></div>
+		<div class="bottom-button">
+		    <button class="button buttonFill"  id="Fill" >Fill </button>
+		</div>
+		<div class="spacer"></div>
+	    </div>
+	    
+	    <div class="hcenter section" id="info">
+		<div class="stacker plot-container">
+		    <div class="hcenter">
+			<span>Pump Speed: <span id="pumpRunSpeed" class="readout">0</span>%</span>
+			<span>Heap: <span id="heapSize" class="readout">0</span> bytes</span>
+		    </div>
+		</div>
+	    </div>
+	    <div class="stacker">
+		<div class="hcenter">
+		    <input type="range" min="0" max="150" class="slider sliderP" value="75" id="pressureLimit">
+		</div>
+		<div style="height:20px"></div>
+		<div class="hcenter">
+		    <span>Pressure Limit:
+		    <span id="pressureDisp" class="readout">7.5</span> psi</span>
+		</div>
+	    </div>
+	</div>
+	<script src="medido.js"></script>
+    </body>
+</html>

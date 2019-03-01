@@ -1,0 +1,23 @@
+<!DOCTYPE xhtml>
+<html lang="en-us">
+    <head>
+	<title>Daisy</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta charset="UTF-8">
+	<link href="static/daisy.css"  rel="stylesheet">
+	<script src="static/zepto.min.js"></script>
+	<script src="static/smoothieMod.js"></script>
+	<script src="static/sprintf.js"></script>
+	<script src="static/gauge.min.js"></script>
+    </head>
+    <body>
+	<div class="container">
+	    <div class="hcenter section">
+		<div class="stacker plot-container">
+		    <canvas id="timeplot" width="1700" height="1000"></canvas>
+		</div>
+	    </div>
+	</div>
+	<script src="static/daisy.js"></script>
+    </body>
+</html>

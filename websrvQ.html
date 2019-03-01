@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <title>Medido Pump</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <style>
+      .button {
+      background-color: #4CAF50; /* Green */
+      border: none;
+      color: white;
+      padding: 15px 32px;
+      text-align: center;
+      text-decoration: none;
+      display: block;
+      width: 95%;
+      font-size: 30px;
+      /* margin: 4px 8px; */
+      cursor: pointer;
+      }
+      .button2 {background-color: #008CBA;} /* Blue */
+      .button3 {background-color: #f44336;} /* Red */ 
+      .button4 {background-color: #e7e7e7; color: black;} /* Gray */ 
+      .button5 {background-color: #555555;} /* Black */
+      .slidecontainer {
+      width: 100%;
+      }
+      .slider {
+      -webkit-appearance: none;
+      width: 95%;
+      height: 80px;
+      background: #d3d3d3;
+      outline: none;
+      opacity: 0.7;
+      -webkit-transition: .2s;
+      transition: opacity .2s;
+      }
+      
+      .slider:hover {
+      opacity: 1;1
+      }
+      .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 80px;
+      height: 80px;
+      background: #4CAF50;
+      cursor: pointer;
+      }
+      .slider::-moz-range-thumb {
+      width: 80px;
+      height: 80px;
+      background: #4CAF50;
+      cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1> ESP8266 Web Server</h1>
+    <p id="counterID"> The Freaking Counter</p>
+    <p id="testing123">Second item</p>
+	<label for="fuel">Fuel Level:</label>
+	<meter class="meter" id="fuel" min="0" max="100" value="47"></meter>
+      <div class="slidecontainer">
+	<input type="range" min="1" max="100" value="50" class="slider" id="myRange">
+	<p>Slider Value: <span id="demo"></span></p>
+      </div>
+      <button class="button button3" name="One" value="Empty" onclick="buttonCB(1)" > Empty</button>
+      <button class="button button5" name="Two" value="Off" onclick="buttonCB(2)" > Off</button>
+      <button class="button button2" name="Three" value="Fill" onclick="buttonCB(3)"> Fill</button>
+      <script>
+	var slider = document.getElementById("myRange");
+	var output = document.getElementById("demo");
+	output.innerHTML = slider.value;
+	//
+	slider.oninput = function() {
+	output.innerHTML = this.value;
+	}
+	//
+	var pressB=99;
+	//create function and execute it immediately
+	(function doPoll() {
+	var oReq = new XMLHttpRequest();
+	//set up listener for when server responds
+	oReq.addEventListener("load", function() {
+	//make the DOM reflect whatever new data we got
+	var elems = oReq.responseText.split(",");
+	document.getElementById("counterID").innerHTML = elems[0];
+	document.getElementById("fuel").value = elems[1];
+	document.getElementById("testing123").innerHTML = elems[2];
+	//set up the next invocation of the polling loop, 200 is the delay in ms
+	//(as written this only happens on success so any single failed request makes the entire thing stop)
+	window.setTimeout(doPoll, 200);
+	});
+	var pumpURL = "http://10.0.0.88?foo=";
+	//var getURL = pumpURL+pressB;
+	var getURL = pumpURL+slider.value;
+	oReq.open("GET", getURL);
+	//fire the missiles
+	oReq.send();
+	pressB = 0
+	})();
+	function buttonCB(ib) {
+	pressB = ib
+	}
+      </script>
+  </body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+

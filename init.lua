@@ -1,0 +1,1 @@
+print("blank init.lua")

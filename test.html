@@ -1,0 +1,47 @@
+<!DOCTYPE xhtml>
+<html lang="en-us">
+    <head>
+	<title>Daisy</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta charset="UTF-8">
+	<link href="daisy.css"  rel="stylesheet">
+    </head>
+    <body>
+	<div class="container">
+	    <div style="position:absolute; top:20px; left:0px">
+		<canvas id="timeplot" width="1200" height="600"></canvas>
+	    </div>
+	    <div style="position:absolute; top:20px; left:1220px">	    
+		<canvas id="gauge1" width="200" height="200"></canvas>
+	    </div>
+	    <div style="position:absolute; top:220px; left:1220px">	    
+		<canvas id="gauge2" width="200" height="200"></canvas>
+	    </div>
+	    <div style="position:absolute; top:420px; left:1220px">
+		<canvas id="gauge3" width="200" height="200"></canvas>
+	    </div>
+	</div>
+	
+	<script> 
+	 var canvas = document.getElementById('timeplot'); 
+	 var c = canvas.getContext('2d'); 
+	 c.fillStyle = "red"; 
+	 c.fillRect(0,0,1200,600);
+
+	 var canvas = document.getElementById('gauge1'); 
+	 var c = canvas.getContext('2d'); 
+	 c.fillStyle = "yellow"; 
+	 c.fillRect(0,0,200,200);
+
+	 var canvas = document.getElementById('gauge2'); 
+	 var c = canvas.getContext('2d'); 
+	 c.fillStyle = "blue"; 
+	 c.fillRect(0,0,200,200);
+	 
+	 var canvas = document.getElementById('gauge3'); 
+	 var c = canvas.getContext('2d'); 
+	 c.fillStyle = "green"; 
+	 c.fillRect(0,0,200,200);
+	</script>
+    </body>
+</html>

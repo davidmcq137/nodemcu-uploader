@@ -1,0 +1,127 @@
+var Ttime=0;
+var Utime;
+var timeOutID=null;
+var nTimeOut=0;
+var pollAwake = false;
+const pollLoopTime=3000;
+const fastTimeOut=3*pollLoopTime;
+const slowTimeOut=6*fastTimeOut;
+var smoothie;
+var smoothieLine1;
+var smoothieLine2;
+var timeOutAwake=true;
+//
+//var ipAddr = location.host;
+//
+//testing
+//var ipAddr=""
+//var ipAddr="localhost:5000"
+var ipAddr="10.0.0.48:5000"
+//
+
+console.log("ipAddr: " + ipAddr)
+
+$(document).ready(function() {
+    console.log("ready fcn")
+    smoothieSetup();
+});
+//
+function pollCB() {
+    var channelValues = JSON.parse(oReq.responseText);
+    var ii = 0
+    var Utime=new Date();
+    for (ch in channelValues) {
+	ii = ii + 1
+	console.log("ii: " + ii + "ch: " + ch + " val: " + channelValues[ch])
+	var pf = parseFloat(channelValues[ch])
+	if (ii == 1) {
+	    smoothieLine1.append(Utime.getTime(), pf/10.);
+	}
+	if (ii ==2) {
+	    smoothieLine2.append(Utime.getTime(), pf/10.);
+	}
+    }
+    //
+    window.setTimeout(doPoll, pollLoopTime);
+};
+//
+function didNotPoll() {
+    nTimeOut = nTimeOut+1
+    if (nTimeOut % 100 == 0) {
+	timeOutAwake = false
+    }
+    console.log("***Polling Timeout*** Count: " + nTimeOut + " Awake: " + timeOutAwake);
+    window.setTimeout(doPoll, pollLoopTime);
+}
+//
+function doPoll() {
+    console.log("in doPoll");
+    if (timeOutID){
+	window.clearTimeout(timeOutID);
+	timeOutAwake = true
+    }
+    getURL = "http://" + ipAddr + "/Query/"
+    console.log("About to GET: " + getURL);
+    oReq.open("GET", getURL);
+    //fire the missiles
+    oReq.send();
+    if (pollAwake) {
+	timeOutID = window.setTimeout(didNotPoll, fastTimeOut);
+    } else {
+	timeOutID = window.setTimeout(didNotPoll, slowTimeOut);		     
+    }
+}
+//
+//set up listener for when server responds
+//
+const oReq = new XMLHttpRequest();
+oReq.addEventListener("load", pollCB)
+//
+console.log("ipAddr: " + ipAddr)
+
+if (ipAddr !== '') { 
+    doPoll();
+} else {
+    setTimeout(test, 100)
+}
+//
+function smoothieSetup() {
+    smoothie = new SmoothieChart(
+	{grid:
+	 {fillStyle:'#d9d9d9', sharpLines:true, millisPerLine:10000*2},
+	 labels:
+	 {fillStyle: '#d9d9d9', precision: 0},
+	 //timestampFormatter:SmoothieChart.timeFormatter,
+	 millisPerPixel:266, minValue: 0, maxValue: 10, interpolation:"Daisy"
+	});
+    var smoothieCanvas=document.getElementById("timeplot");
+    smoothieLine1 = new TimeSeries();
+    smoothieLine2 = new TimeSeries();
+    smoothie.streamTo(smoothieCanvas,250) //250
+    smoothie.addTimeSeries(smoothieLine1,
+			   {lineWidth: 2, strokeStyle: '#009900', fillstyle:'#ccffcc'});
+    smoothie.addTimeSeries(smoothieLine2,
+			   {lineWidth: 2, strokeStyle: '#0000FF', fillstyle:'#000099'});
+}
+//
+//
+function test() {
+    var GG;
+    var test1;
+    var test2;
+    //
+    Ttime = Ttime + 100/1000    
+    test1 = 5+5*Math.cos(6.28*Ttime/50)
+    test2 = 60*Math.sin(6.28*Ttime/1000);
+    GG = Math.abs(test2/10);
+    GG = (GG - Math.trunc(GG))*10;
+    Utime = new Date();
+    smoothieLine1.append(Utime.getTime(), test1);
+    smoothieLine2.append(Utime.getTime(), GG);
+    if (0 == 0) {
+	console.log(Ttime, test1, test2, GG)
+    }
+    if (Ttime <= 10000) {
+	setTimeout(test, pollLoopTime)
+    }
+}
