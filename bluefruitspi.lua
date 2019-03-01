@@ -63,9 +63,19 @@ _HSPI = 1 -- this is the "user" spi bus on the nodemcu
 local g_irq = 0
 local g_cs = 0
 local g_reset = 0
+local g_irq_state = 1
+local readTmr
+
+function irqCB(lev,pul,cnt)
+   print("lev:", lev)
+   g_irq_state = lev
+   if lev == 0 then gpio.trig(g_irq, "up") else gpio.trig(g_irq, "down") end
+end
+
 
 function readIRQ()
    if gpio.read(g_irq) == 1 then return false else return true end
+   --if g_irq_state == 1 then return false else return true end
 end
 
 function spi_init (id, cs, irq, reset)
@@ -112,7 +122,9 @@ function spi_init (id, cs, irq, reset)
       g_cs = cs -- g_cs ~= 0 if in "manual cs" mode
    end
 
-   gpio.mode(irq, gpio.INPUT)    -- no option for pulldown in esp8266
+   gpio.mode(irq, gpio.INPUT)   
+   --gpio.mode(irq, gpio.INT, gpio.PULLUP)
+   --gpio.trig(irq, "down", irqCB)
    g_irq = irq
    
    local DATABITS = 8
@@ -199,10 +211,11 @@ function spi_cmd(SDEP_func, cmdP)
 	    --print("@", i, tx[i])
 	 end
       end
-      
-      --for i=1, _SDEP_HEADER_LENGTH + plen, 1 do
-	-- print(string.format("-->%d 0x%02x %s", i, tx[i], string.char(tx[i]) ) )
-      --end
+
+--      print("plen:", plen)
+--       for i=1, _SDEP_HEADER_LENGTH + plen, 1 do
+--	 print(string.format("-->%d 0x%02x %s", i, tx[i], string.char(tx[i]) ) )
+--      end
 
       if g_cs ~= 0 then
 	 gpio.write(g_cs, gpio.LOW)
@@ -219,6 +232,13 @@ function spi_cmd(SDEP_func, cmdP)
       --print("bott pos=pos+plen: pos, plen", pos, plen)
       
    end
+
+   -- there won't be a response if we are doing a reset, so just return...
+   if SDEP_func == _SDEP_INITIALIZE then
+      print("SDEP init done")
+      return 0,0,"Init"
+   end
+
 
    -- Wait for a response (usually not even one trip thru the loop...)
    timeout = 800 -- 800 * 50 usec = 40 msec
@@ -238,13 +258,16 @@ function spi_cmd(SDEP_func, cmdP)
    local rspid = 0
    local rsplen = 0
    local rsp = ""
+   local msgtype1, rspid1, rsplen1
    
    local ll=0
    local rx={}
    local MSG_resp=false
    local mr
-   
-   while readIRQ() or MSG_resp do -- use or with MSG_resp because IRQ seen to disappear sometimes
+   local foo=0
+   local firstloop=true -- we saw IRQ already, so go ahead into loop
+   while firstloop or MSG_resp do  -- IRQ may be gone by now...
+      firstloop=false
       tmr.delay(10000)            -- this tmr() is critical. works at 8000 fails at 5000. go figure.
       ll=ll+1
       -- Read the current response packet
@@ -262,6 +285,7 @@ function spi_cmd(SDEP_func, cmdP)
       end
       
       if ll == 1 then -- check on very first read for response code or error
+	 foo=1
 	 mr=string.byte(buf_rx, 1)
 	 
 	 if mr == _MSG_RESPONSE then
@@ -282,6 +306,13 @@ function spi_cmd(SDEP_func, cmdP)
       -- Read the message envelope and contents -- note < vs > on Kevin's code
       msgtype, rspid, rsplen = struct.unpack('<BHB', buf_rx)
 
+      if ll == 1 then
+	 msgtype1 = msgtype
+	 rspid1 = rspid 
+	 rsplen1 = rsplen
+      end
+      
+      
       --print(string.format("%%msgtype: 0x%02x, rspid: 0x%02x, rsplen: 0x%02x", msgtype, rspid, rsplen))
       
       if rsplen >= _SDEP_BUFFER_LENGTH - _SDEP_HEADER_LENGTH then -- more (0x80) set
@@ -308,6 +339,11 @@ function spi_cmd(SDEP_func, cmdP)
    
 --   print("\r\n")
 
+--   print("msgtype1, rspid1, rsplen1:", msgtype1, rspid1, rsplen1)
+--   print("mr:", mr)
+--   print("foo:", foo)
+--   print("ll:", ll)
+   
    return msgtype, rspid, rsp
 
 end
@@ -319,11 +355,15 @@ function spi_SDEP_init(callBack)
    -- This command should complete in under 1s.
 
    local mt, id, rsp
+   print("in SDEP_init about to spi_cmd")
+   print("cb:", callBack)
    mt, id, rsp = spi_cmd(_SDEP_INITIALIZE)
    
    -- since it may take 1s to reset, allow for a pass-in callback after 1 sec
-   if callBack then tmr.create():alarm(1000, tmr.ALARM_SINGLE, callBack) end
-
+   if callBack then
+      print("tmr setup for callback")
+      tmr.create():alarm(1000, tmr.ALARM_SINGLE, callBack)
+   end
    return rsp
 end
 
@@ -399,147 +439,266 @@ function spi_command_check_OK(command, dly)
 end
 
 
+
+
+function testprog()
+
+   print("in testprog")
+
+   print("1. spi_cmd(_SDEP_ATCOMMAND, 'AT+BLEGETADDR')")
+   local msgtype, rspid, rsp
+   msgtype, rspid, rsp = spi_cmd(_SDEP_ATCOMMAND, "AT+BLEGETADDR")
+   print("msgtype, rspid, rsp:",
+         string.format("0x%02x", msgtype),
+         string.format("0x%02x", rspid) )
+   
+   print("#rsp:", #rsp)
+   print("rsp:")
+   print(rsp)
+
+   local ss="rsp: "
+   for i=1,#rsp,1 do
+      local rb = string.byte(rsp, i)
+      ss = ss .. string.format("0x%02x", rb)
+   end
+   print(ss)
+   print(" ")
+   
+   print("2. spi_command_check_OK('ATI')")
+   rsp=spi_command_check_OK("ATI")
+   print("#rsp:", #rsp)
+   print("rsp:")
+   print(rsp)
+   print(" ")
+   local ss="rsp: "
+   for i=1,#rsp,1 do
+      local rb = string.byte(rsp, i)
+      ss = ss .. string.format("0x%02x", rb)
+   end
+   print(ss)
+   print(" ")
+   
+   --print("3. spi_connected()")
+   --if spi_connected() then print("connected") else print("not connected") end
+   --print(" ")
+   
+   --print("4. spi_command(str)")
+   --str = spi_command("ATI")
+   --print("ret:")
+   --print(str)
+   --print(" ")
+   
+   --print("5. spi_command('AT+BLEUARTRX')")
+   --str = spi_command("AT+BLEUARTRX")
+   --print("ret:")
+   --print(str)
+   --print(" ")
+   
+   --print("6. spi_command_check_OK('AT+BLEGETRSSI')")
+   --str= spi_command_check_OK("AT+BLEGETRSSI")
+   --print("ret:")
+   --print(str)
+   --print(" ")
+   
+   --print("7. spi_command_check_OK('AT+HWRANDOM')")
+   --str= spi_command_check_OK("AT+HWRANDOM")
+   --print("ret:")
+   --print(str)
+   --print(" ")
+   
+   --print("8. spi_command_check_OK('AT+BLEGETADDR')")
+   --str= spi_command_check_OK("AT+BLEGETADDR")
+   --print("ret:")
+   --print(str)
+   --print(" ")
+   
+   --print("9. spi_uart_tx(data)")
+   --ret = spi_uart_tx("Hello Apple$%&\\r\\n")
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   --print("10. spi_uart_tx(data)")
+   --ret = spi_uart_tx("Hello Apple Again@#$!!\\r\\n")
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   --print("11a. spi_command(AT+BLEUARTFLOW)")
+   --ret = spi_command("AT+BLEUARTFLOW")
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   --print("11b. spi_command(AT+BLEUARTFLOW=off)")
+   --ret = spi_command("AT+BLEUARTFLOW=off")
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   --print("11c. spi_command(AT+BLEUARTFLOW)")
+   --ret = spi_command("AT+BLEUARTFLOW")
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   --print("11c. spi_command(AT+BLEUARTFIFO=TX)")
+   --ret = spi_command("AT+BLEUARTFIFO")
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   --print("12. spi_uart_rx()")
+   --ret = spi_uart_rx()
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   print("14. spi_cmd(_SDEP_BLEUART_RX)")
+   msgtype, rspid, rsp=spi_cmd(_SDEP_BLEUART_RX)
+   print("msgtype, rspid:", msgtype, rspid)
+   if not rsp then
+      print("rsp nil")
+      rsp="" 
+   end
+   print("#rsp:", #rsp)
+   print("rsp:")
+   print(rsp)
+   print(" ")
+   
+   local msgtype, rspid, rsp
+   
+   print("13. spi_cmd(_SDEP_BLEUART_TX, '----')")
+   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX,"1,2,3,4,5,1.1,2.2,3.3,4.4,5.5") 
+   print("msgtype, rspid:", msgtype, rspid)
+   if not rsp then print("rsp nil") else print("#rsp:", #rsp) end
+   print("rsp:")
+   print(rsp)
+   print(" ")
+   
+   
+   --print("Starting 2 msgs")
+   --local t1=tmr.now()
+   --for i=1,2,1 do
+   --   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX, "1.1,2.2,3.3,4.4,5.5,10.10,20.20,30.30")
+   --end
+   --print("time elapsed (ms):", (tmr.now()-t1)/1000.)
+   
+   --print("15. spi_command('AT+GATTCLEAR')")
+   --ret = spi_command("AT+GATTCLEAR")
+   --print(ret)
+   
+   
+   --print("15. spi_command('AT+GATTSERVICE=UUID=0x180F')")
+   --ret = spi_command("AT+GATTSERVICE=UUID=0x180F")
+   --print(ret)
+   
+   
+   --print("15. spi_command('AT+HELP')")
+   --ret = spi_command("AT+HELP")
+   --print(ret)
+
+end
+
+ii=0
+function readCB()
+   --print("readCB")
+   ii=ii+1
+   --jstr=string.format("%d,%d,%d,%d,%d", ii, ii+1, ii+2, ii+3, ii+4)
+   jstr=string.format("%d", ii)
+   --print(jstr)
+   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX, jstr)
+   
+   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_RX)
+   if #rsp ~= 0 then
+      print("msgtype, rspid, rsp", msgtype, rspid, rsp)
+   end
+   if string.find(rsp, "(Slider: 0)") then
+      print("done")
+      return
+   else
+      tmr.start(readTmr)
+   end
+end
+
+
 --function spi_init (spi, cs, irq, reset)
-
+print("about to spi_init")
 spi_init (_HSPI, 1, 2, 0) -- alt cs is 1
+--ret=spi_SDEP_init()
+--print("return from SDEP_init:", ret)
 
-print("1. spi_cmd(_SDEP_ATCOMMAND, 'AT+BLEGETADDR')")
-local msgtype, rspid, rsp
-msgtype, rspid, rsp = spi_cmd(_SDEP_ATCOMMAND, "AT+BLEGETADDR")
-print("msgtype, rspid, rsp:",
-      string.format("0x%02x", msgtype),
-      string.format("0x%02x", rspid) )
+--tmr.delay(1000000)
 
-if not rsp then print("bye") return end
-
-
-print("#rsp:", #rsp)
-print("rsp:")
-print(rsp)
-
-local ss="rsp: "
-for i=1,#rsp,1 do
-   local rb = string.byte(rsp, i)
-   ss = ss .. string.format("0x%02x", rb)
-end
-print(ss)
-print(" ")
-
-print("2. spi_command_check_OK('ATI')")
 rsp=spi_command_check_OK("ATI")
-print("#rsp:", #rsp)
-print("rsp:")
-print(rsp)
-print(" ")
-local ss="rsp: "
-for i=1,#rsp,1 do
-   local rb = string.byte(rsp, i)
-   ss = ss .. string.format("0x%02x", rb)
-end
-print(ss)
-print(" ")
+print("rsp from ATI:")
+print(ret)
 
-print("3. spi_connected()")
 if spi_connected() then print("connected") else print("not connected") end
 print(" ")
 
-print("4. spi_command(str)")
-str = spi_command("ATI")
-print("ret:")
-print(str)
+
+readTmr=tmr.create()
+tmr.register(readTmr, 100, tmr.ALARM_SEMI, readCB)
+tmr.start(readTmr)
+
+--[[
+local ii=1
+while true do
+   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_RX)
+   print("msgtype, rspid, rsp", msgtype, rspid, rsp)
+   print("ii, rsp:", ii, rsp)
+   if #rsp == 0 then break end
+   ii = ii + 1
+   if ii> 10 then print("breaking >10") break end
+end
 print(" ")
 
---print("5. spi_command('AT+BLEUARTRX')")
---str = spi_command("AT+BLEUARTRX")
---print("ret:")
---print(str)
---print(" ")
+ii=0
+print("start while")
+t0=tmr.now()
+while true do
+   ii=ii+1
+   if ii>2 then break end
+   xrp="(1.2,2.3,3.4,4.5)"
+   
+   srp="1.1,2.2,3.3,4.4"
+--   print(" ")
+--   print("TX Sending:", srp..","..tostring(ii))
+  
+--   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX,srp)
+--   print("TX ret msgtype, rspid, rsp", msgtype, rspid, rsp)
+--   print("TX rsp:", rsp)
+   
+   if not spi_connected() then
+      print("not connected")
+      break
+   end
+   
+   for i=1,10,1 do
+      msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_RX)
+      print("RX: msgtype, rspid, rsp", msgtype, rspid, rsp)
+      print("RX returns:", i, rsp)
+      if #rsp > 0 then break end
+      if i == 10 then print("breaking at 10") end
+   end
 
-print("6. spi_command_check_OK('AT+BLEGETRSSI')")
-str= spi_command_check_OK("AT+BLEGETRSSI")
-print("ret:")
-print(str)
-print(" ")
-
-print("7. spi_command_check_OK('AT+HWRANDOM')")
-str= spi_command_check_OK("AT+HWRANDOM")
-print("ret:")
-print(str)
-print(" ")
-
-print("8. spi_command_check_OK('AT+BLEGETADDR')")
-str= spi_command_check_OK("AT+BLEGETADDR")
-print("ret:")
-print(str)
-print(" ")
-
---print("9. spi_uart_tx(data)")
---ret = spi_uart_tx("Hello Apple$%&\\r\\n")
---print("ret:")
---print(ret)
---print(" ")
-
---print("10. spi_uart_tx(data)")
---ret = spi_uart_tx("Hello Apple Again@#$!!\\r\\n")
---print("ret:")
---print(ret)
---print(" ")
-
---print("11a. spi_command(AT+BLEUARTFLOW)")
---ret = spi_command("AT+BLEUARTFLOW")
---print("ret:")
---print(ret)
---print(" ")
-
---print("11b. spi_command(AT+BLEUARTFLOW=off)")
---ret = spi_command("AT+BLEUARTFLOW=off")
---print("ret:")
---print(ret)
---print(" ")
-
---print("11c. spi_command(AT+BLEUARTFLOW)")
---ret = spi_command("AT+BLEUARTFLOW")
---print("ret:")
---print(ret)
---print(" ")
-
---print("11c. spi_command(AT+BLEUARTFIFO=TX)")
---ret = spi_command("AT+BLEUARTFIFO")
---print("ret:")
---print(ret)
---print(" ")
-
---print("12. spi_uart_rx()")
---ret = spi_uart_rx()
---print("ret:")
---print(ret)
---print(" ")
-
-local msgtype, rspid, rsp
-
-print("13. spi_cmd(_SDEP_BLEUART_TX, '----')")
-msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX, "Hello There ios\\r\\n")
-print("msgtype, rspid:", msgtype, rspid)
-print("rsp:")
-print(rsp)
-print(" ")
-
-print("14. spi_cmd(_SDEP_BLEUART_RX)")
-msgtype, rspid, rsp=spi_cmd(_SDEP_BLEUART_RX)
-print("msgtype, rspid:", msgtype, rspid)
-print("rsp:")
-print(rsp)
-print(" ")
-
-for i=1,100,1 do
-   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX, "Hello There ios\\r\\n")
+--   if rsp ~= xrp then
+--      if rsp == nil or rsp == "" then rsp="#0" end
+--      print("RX does not match", rsp)
+--   end
+   
+--   print(" ")
+--   print(" ")
 end
 
+print("time=", (tmr.now()-t0)/1000000.)
 
+--testprog()
 
+--function spi_SDEP_init(callBack)
+--print("about to SDEP_init")
+--ret=spi_SDEP_init()
+--print("return from SDEP_init:", ret)
 
-
-
-
-
-
+--]]
