@@ -32,10 +32,9 @@
 ---  ** Hardware: **
 --- "* `Adafruit Bluefruit LE SPI Friend <https://www.adafruit.com/product/2633>`_"
 
--- Setup for Lua require
+-- Setup for Lua require e.g. require ble = require "bleSPI"
 
---local bluefruitspi = {}
-
+local bleSPI = {}
 
 _MSG_COMMAND   = 0x10  -- Command message
 _MSG_RESPONSE  = 0x20  -- Response message
@@ -83,7 +82,7 @@ function readIRQ()
    --if g_irq_state == 1 then return false else return true end
 end
 
-function spi_init (id, cs, irq, reset)
+function bleSPI.spi_init (id, cs, irq, reset)
    
    -- See nodemcu docs for more inf on spi, struct, and gpio
    -- modules that are relied upon in this lua/nodemcu port
@@ -140,7 +139,7 @@ function spi_init (id, cs, irq, reset)
 end
 
 
-function spi_cmd(SDEP_func, cmdP)
+function bleSPI.spi_cmd(SDEP_func, cmdP)
    
    --parameter SDEP_func can be _SDEP_ATCOMMAND for execution of AT commands
    --or _SDRP_BLEUART_TX or .._RX for UART functions
@@ -372,9 +371,9 @@ function spi_SDEP_init(callBack)
    return rsp
 end
 
-function spi_connected()
+function bleSPI.spi_connected()
    --Checks whether the Bluefruit module is connected to the central--
-   return tonumber(spi_command_check_OK('AT+GAPGETCONN\n')) == 1
+   return tonumber(bleSPI.spi_command_check_OK('AT+GAPGETCONN\n')) == 1
 end
 
 function spi_uart_tx(data)
@@ -397,7 +396,7 @@ end
 function spi_command(string)
    --Send a command and check response code
    local msgtype, msgid, rsp
-   msgtype, msgid, rsp = spi_cmd(_SDEP_ATCOMMAND, string)
+   msgtype, msgid, rsp = bleSPI.spi_cmd(_SDEP_ATCOMMAND, string)
    if not rsp or msgtype==0 or msgtype == _MSG_ERROR then
       print("_MSG_ERROR", string.format("0x%02x", msgid))
       return nil
@@ -412,7 +411,7 @@ function spi_command(string)
 end
 
 
-function spi_command_check_OK(command, dly)
+function bleSPI.spi_command_check_OK(command, dly)
 
    --Send a fully formed bytestring AT command, and check
    --whether we got an 'OK' back. Returns payload bytes if there are any
@@ -443,112 +442,4 @@ function spi_command_check_OK(command, dly)
    return nil
 end
 
----[[
-
---test code
-
-ii=0
-local pulseCount = 0
-local pumpFwd = true
-
-function readCB()
-   --print("readCB")
-   local v = ads.readAdc(0)
-   local jstr=string.format("(Voltage:%f)", v)
-   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX, jstr)
-
-   ii=ii+1
-   local jstr=string.format("(Sequence:%d)", ii)
-   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX, jstr)
-
-   local jstr=string.format("(Pulse:%d)", pulseCount)
-   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX, jstr)
-   
-   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_RX)
-   if #rsp ~= 0 then
-      print("msgtype, rspid, rsp", msgtype, rspid, rsp)
-   end
-   local sl = string.find(rsp, "%(Slider:")
-   if sl then
-      local ps = string.match(rsp, "(%d+)")
-      print("ps: ", ps)
-      local maxPWM=1023
-      local minPWM=0
-      local pumpPWM
-      pumpPWM = math.floor(ps*maxPWM/100)
-      if pumpPWM < minPWM then pumpPWM = 0 end
-      if pumpPWM > 1023 then pumpPWM = maxPWM end
-      print("setduty: ", pumpPWM)
-      pwm.setduty(pwmPumpPin, pumpPWM)
-   end
-   if string.find(rsp, "(Slider: 0)") then
-      print("done")
-      return
-   else
-      tmr.start(readTmr)
-   end
-end
-
-
-
-local flowMeterPin = 8
-
-function gpioCB(lev, pul, cnt)
-   if pumpFwd then
-      pulseCount=pulseCount + cnt
-   else
-      pulseCount=pulseCount - cnt
-   end
-   gpio.trig(flowMeterPin, "up")
-end
-
---function spi_init (spi, cs, irq, reset)
-print("about to spi_init")
-spi_init (_HSPI, 1, 0, 0) -- alt cs is 1
-
---ret=spi_SDEP_init()
---print("return from SDEP_init:", ret)
-
---tmr.delay(1000000)
-
-pwmPumpPin = 2 -- GPIO 4
-pwm.setup (pwmPumpPin,   1000, 0)
-pwm.setduty(pwmPumpPin, 512)
-
-gpio.mode(8, gpio.INPUT, gpio.PULLUP) -- for flowmeter
-
-local id = 0
-local sda = 4 -- GPIO 2
-local scl = 3 -- GPIO 0
-
-
-mcp = require "mcp23008"
-
--- note sda and scl are labelled wrong on the silkscreen of the Huzzah board (!)
-i2c.setup(id, sda, scl, i2c.SLOW)
-mcp.gpioSetIOdir(0x00) -- set for all outputs
-mcp.gpioWritePin(2, 1)
-
-ads = require "adc1115"
-
-local v = ads.readAdc(0)
-print("ADC voltage(0) =", v)
-
-gpio.mode(flowMeterPin, gpio.INT)
-gpio.trig(flowMeterPin, "up", gpioCB)
-
-rsp=spi_command_check_OK("ATI")
-print("rsp from ATI:")
-print(ret)
-
-if spi_connected() then print("connected") else print("not connected") end
-print(" ")
-
-
-readTmr=tmr.create()
-tmr.register(readTmr, 50, tmr.ALARM_SEMI, readCB)
-tmr.start(readTmr)
-
---]]
-
---return bluefruitspi
+return bleSPI

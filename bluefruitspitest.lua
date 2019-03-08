@@ -32,11 +32,6 @@
 ---  ** Hardware: **
 --- "* `Adafruit Bluefruit LE SPI Friend <https://www.adafruit.com/product/2633>`_"
 
--- Setup for Lua require
-
---local bluefruitspi = {}
-
-
 _MSG_COMMAND   = 0x10  -- Command message
 _MSG_RESPONSE  = 0x20  -- Response message
 _MSG_ALERT     = 0x40  -- Alert message
@@ -443,43 +438,180 @@ function spi_command_check_OK(command, dly)
    return nil
 end
 
----[[
 
---test code
+
+
+function testprog()
+
+   print("in testprog")
+
+   print("1. spi_cmd(_SDEP_ATCOMMAND, 'AT+BLEGETADDR')")
+   local msgtype, rspid, rsp
+   msgtype, rspid, rsp = spi_cmd(_SDEP_ATCOMMAND, "AT+BLEGETADDR")
+   print("msgtype, rspid, rsp:",
+         string.format("0x%02x", msgtype),
+         string.format("0x%02x", rspid) )
+   
+   print("#rsp:", #rsp)
+   print("rsp:")
+   print(rsp)
+
+   local ss="rsp: "
+   for i=1,#rsp,1 do
+      local rb = string.byte(rsp, i)
+      ss = ss .. string.format("0x%02x", rb)
+   end
+   print(ss)
+   print(" ")
+   
+   print("2. spi_command_check_OK('ATI')")
+   rsp=spi_command_check_OK("ATI")
+   print("#rsp:", #rsp)
+   print("rsp:")
+   print(rsp)
+   print(" ")
+   local ss="rsp: "
+   for i=1,#rsp,1 do
+      local rb = string.byte(rsp, i)
+      ss = ss .. string.format("0x%02x", rb)
+   end
+   print(ss)
+   print(" ")
+   
+   --print("3. spi_connected()")
+   --if spi_connected() then print("connected") else print("not connected") end
+   --print(" ")
+   
+   --print("4. spi_command(str)")
+   --str = spi_command("ATI")
+   --print("ret:")
+   --print(str)
+   --print(" ")
+   
+   --print("5. spi_command('AT+BLEUARTRX')")
+   --str = spi_command("AT+BLEUARTRX")
+   --print("ret:")
+   --print(str)
+   --print(" ")
+   
+   --print("6. spi_command_check_OK('AT+BLEGETRSSI')")
+   --str= spi_command_check_OK("AT+BLEGETRSSI")
+   --print("ret:")
+   --print(str)
+   --print(" ")
+   
+   --print("7. spi_command_check_OK('AT+HWRANDOM')")
+   --str= spi_command_check_OK("AT+HWRANDOM")
+   --print("ret:")
+   --print(str)
+   --print(" ")
+   
+   --print("8. spi_command_check_OK('AT+BLEGETADDR')")
+   --str= spi_command_check_OK("AT+BLEGETADDR")
+   --print("ret:")
+   --print(str)
+   --print(" ")
+   
+   --print("9. spi_uart_tx(data)")
+   --ret = spi_uart_tx("Hello Apple$%&\\r\\n")
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   --print("10. spi_uart_tx(data)")
+   --ret = spi_uart_tx("Hello Apple Again@#$!!\\r\\n")
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   --print("11a. spi_command(AT+BLEUARTFLOW)")
+   --ret = spi_command("AT+BLEUARTFLOW")
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   --print("11b. spi_command(AT+BLEUARTFLOW=off)")
+   --ret = spi_command("AT+BLEUARTFLOW=off")
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   --print("11c. spi_command(AT+BLEUARTFLOW)")
+   --ret = spi_command("AT+BLEUARTFLOW")
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   --print("11c. spi_command(AT+BLEUARTFIFO=TX)")
+   --ret = spi_command("AT+BLEUARTFIFO")
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   --print("12. spi_uart_rx()")
+   --ret = spi_uart_rx()
+   --print("ret:")
+   --print(ret)
+   --print(" ")
+   
+   print("14. spi_cmd(_SDEP_BLEUART_RX)")
+   msgtype, rspid, rsp=spi_cmd(_SDEP_BLEUART_RX)
+   print("msgtype, rspid:", msgtype, rspid)
+   if not rsp then
+      print("rsp nil")
+      rsp="" 
+   end
+   print("#rsp:", #rsp)
+   print("rsp:")
+   print(rsp)
+   print(" ")
+   
+   local msgtype, rspid, rsp
+   
+   print("13. spi_cmd(_SDEP_BLEUART_TX, '----')")
+   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX,"1,2,3,4,5,1.1,2.2,3.3,4.4,5.5") 
+   print("msgtype, rspid:", msgtype, rspid)
+   if not rsp then print("rsp nil") else print("#rsp:", #rsp) end
+   print("rsp:")
+   print(rsp)
+   print(" ")
+   
+   
+   --print("Starting 2 msgs")
+   --local t1=tmr.now()
+   --for i=1,2,1 do
+   --   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX, "1.1,2.2,3.3,4.4,5.5,10.10,20.20,30.30")
+   --end
+   --print("time elapsed (ms):", (tmr.now()-t1)/1000.)
+   
+   --print("15. spi_command('AT+GATTCLEAR')")
+   --ret = spi_command("AT+GATTCLEAR")
+   --print(ret)
+   
+   
+   --print("15. spi_command('AT+GATTSERVICE=UUID=0x180F')")
+   --ret = spi_command("AT+GATTSERVICE=UUID=0x180F")
+   --print(ret)
+   
+   
+   --print("15. spi_command('AT+HELP')")
+   --ret = spi_command("AT+HELP")
+   --print(ret)
+
+end
 
 ii=0
-local pulseCount = 0
-local pumpFwd = true
-
 function readCB()
    --print("readCB")
-   local v = ads.readAdc(0)
-   local jstr=string.format("(Voltage:%f)", v)
-   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX, jstr)
-
    ii=ii+1
-   local jstr=string.format("(Sequence:%d)", ii)
-   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX, jstr)
-
-   local jstr=string.format("(Pulse:%d)", pulseCount)
+   --jstr=string.format("%d,%d,%d,%d,%d", ii, ii+1, ii+2, ii+3, ii+4)
+   jstr=string.format("%d", ii)
+   --print(jstr)
    msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX, jstr)
    
    msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_RX)
    if #rsp ~= 0 then
       print("msgtype, rspid, rsp", msgtype, rspid, rsp)
-   end
-   local sl = string.find(rsp, "%(Slider:")
-   if sl then
-      local ps = string.match(rsp, "(%d+)")
-      print("ps: ", ps)
-      local maxPWM=1023
-      local minPWM=0
-      local pumpPWM
-      pumpPWM = math.floor(ps*maxPWM/100)
-      if pumpPWM < minPWM then pumpPWM = 0 end
-      if pumpPWM > 1023 then pumpPWM = maxPWM end
-      print("setduty: ", pumpPWM)
-      pwm.setduty(pwmPumpPin, pumpPWM)
    end
    if string.find(rsp, "(Slider: 0)") then
       print("done")
@@ -490,52 +622,13 @@ function readCB()
 end
 
 
-
-local flowMeterPin = 8
-
-function gpioCB(lev, pul, cnt)
-   if pumpFwd then
-      pulseCount=pulseCount + cnt
-   else
-      pulseCount=pulseCount - cnt
-   end
-   gpio.trig(flowMeterPin, "up")
-end
-
 --function spi_init (spi, cs, irq, reset)
 print("about to spi_init")
-spi_init (_HSPI, 1, 0, 0) -- alt cs is 1
-
+spi_init (_HSPI, 1, 2, 0) -- alt cs is 1
 --ret=spi_SDEP_init()
 --print("return from SDEP_init:", ret)
 
 --tmr.delay(1000000)
-
-pwmPumpPin = 2 -- GPIO 4
-pwm.setup (pwmPumpPin,   1000, 0)
-pwm.setduty(pwmPumpPin, 512)
-
-gpio.mode(8, gpio.INPUT, gpio.PULLUP) -- for flowmeter
-
-local id = 0
-local sda = 4 -- GPIO 2
-local scl = 3 -- GPIO 0
-
-
-mcp = require "mcp23008"
-
--- note sda and scl are labelled wrong on the silkscreen of the Huzzah board (!)
-i2c.setup(id, sda, scl, i2c.SLOW)
-mcp.gpioSetIOdir(0x00) -- set for all outputs
-mcp.gpioWritePin(2, 1)
-
-ads = require "adc1115"
-
-local v = ads.readAdc(0)
-print("ADC voltage(0) =", v)
-
-gpio.mode(flowMeterPin, gpio.INT)
-gpio.trig(flowMeterPin, "up", gpioCB)
 
 rsp=spi_command_check_OK("ATI")
 print("rsp from ATI:")
@@ -546,9 +639,66 @@ print(" ")
 
 
 readTmr=tmr.create()
-tmr.register(readTmr, 50, tmr.ALARM_SEMI, readCB)
+tmr.register(readTmr, 100, tmr.ALARM_SEMI, readCB)
 tmr.start(readTmr)
 
---]]
+--[[
+local ii=1
+while true do
+   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_RX)
+   print("msgtype, rspid, rsp", msgtype, rspid, rsp)
+   print("ii, rsp:", ii, rsp)
+   if #rsp == 0 then break end
+   ii = ii + 1
+   if ii> 10 then print("breaking >10") break end
+end
+print(" ")
 
---return bluefruitspi
+ii=0
+print("start while")
+t0=tmr.now()
+while true do
+   ii=ii+1
+   if ii>2 then break end
+   xrp="(1.2,2.3,3.4,4.5)"
+   
+   srp="1.1,2.2,3.3,4.4"
+--   print(" ")
+--   print("TX Sending:", srp..","..tostring(ii))
+  
+--   msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_TX,srp)
+--   print("TX ret msgtype, rspid, rsp", msgtype, rspid, rsp)
+--   print("TX rsp:", rsp)
+   
+   if not spi_connected() then
+      print("not connected")
+      break
+   end
+   
+   for i=1,10,1 do
+      msgtype, rspid, rsp = spi_cmd(_SDEP_BLEUART_RX)
+      print("RX: msgtype, rspid, rsp", msgtype, rspid, rsp)
+      print("RX returns:", i, rsp)
+      if #rsp > 0 then break end
+      if i == 10 then print("breaking at 10") end
+   end
+
+--   if rsp ~= xrp then
+--      if rsp == nil or rsp == "" then rsp="#0" end
+--      print("RX does not match", rsp)
+--   end
+   
+--   print(" ")
+--   print(" ")
+end
+
+print("time=", (tmr.now()-t0)/1000000.)
+
+--testprog()
+
+--function spi_SDEP_init(callBack)
+--print("about to SDEP_init")
+--ret=spi_SDEP_init()
+--print("return from SDEP_init:", ret)
+
+--]]

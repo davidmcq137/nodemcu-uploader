@@ -1,23 +1,47 @@
-local function b2i(b1,b2)
-   local n=b1*256 + b2
-   if n >= 32768 then return n-65536 else return n end
-end
+--[[
 
+adc1115.lua
+
+driver for the 4-channel 16-bit TI ads1115 A/D with 4-input mux
+also works with the 12-bit part, TI ads1015
+
+set up as a lua module so you can:
+
+ads = require "adc1115"
+
+note: don't use "nickname" adc .. that's the internal one on the 8266
+
+external function call:
+
+vout = adc1115.readAdc(i2c_addr, mux_pin)
+
+for init, see test code below
+default i2c addr for the adafruit part is 0x48
+
+--]]
+
+local adc1115 = {}
+local dev_addr = 0x48
 local lastMux=-1
 
-function readAdc(dev_addr, aN)
+function adc1115.readAdc(aN)
    -- if mux has not changed since last read, we can read once
    -- read again if we had to change it .. can't get stable
    -- reading on the same transaction that changes the mux
-   vv = readAdcI(dev_addr, aN)
+   vv = readAdcI(aN)
    if lastMux ~= aN then
-      vv = readAdcI(dev_addr, aN)
+      vv = readAdcI(aN)
    end
    lastMux=aN
    return vv
 end
 
-function readAdcI(dev_addr, aN)
+local function b2i(b1,b2) -- handle signed int from 2's complement
+   local n=b1*256 + b2
+   if n >= 32768 then return n-65536 else return n end
+end
+
+function readAdcI(aN)
 
    -- works for TI ads1115 and ads1015 a/d converts with 4-input mux
    -- dev_addr is i2c address (e.g. 0x48)
@@ -75,13 +99,18 @@ function readAdcI(dev_addr, aN)
    i2c.stop(id)
    
    return (2.048 * b2i(string.byte(c,1), string.byte(c,2)) / 32767) 
-
 end
 
--- initialize i2c, set pin1 as sda, set pin2 as scl
+
+--[[ 
+
+--test code
+
+
+-- initialize i2c, 
 local id = 0
-local sda = 1
-local scl = 2
+local sda = 4 -- GPIO2
+local scl = 3 -- GPIO0
 
 -- note sda and scl are labelled wrong on the silkscreen of the Huzzah board (!)
 i2c.setup(id, sda, scl, i2c.SLOW)
@@ -119,3 +148,6 @@ while true do
    --break
 end
 
+--]]
+
+return adc1115

@@ -18,7 +18,7 @@ restrictions:
 only implements one route: "/" for index.html and other source(s) and ajax with query strings
 only intended for GET requests
 
-oddness: sometimes loads files twice??
+oddness: sometimes loads files twice?? or maybe it's ios asking to load twice?
 
 --]]
 
