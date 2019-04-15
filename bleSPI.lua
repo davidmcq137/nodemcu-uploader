@@ -393,6 +393,7 @@ function spi_uart_rx()
    end
 end
 
+
 function spi_command(string)
    --Send a command and check response code
    local msgtype, msgid, rsp
@@ -408,6 +409,10 @@ function spi_command(string)
 	    string.format("ID: 0x%02x", msgid))
       return nil
    end
+end
+
+function bleSPI.spi_command_generic(command)
+   return(spi_command(command))
 end
 
 

@@ -19,13 +19,14 @@ PIDiGain = 10
 PIDpTerm = 0
 PIDiTerm = 0
 MINpress = 0
-MAXpress = 15
+MAXpress = 10
 pressLimit = (MAXpress + MINpress)/2
 
 -- end globals
 
 local dispRstPin   = 1 --MCP23008
 local flowDirPin   = 2 --MCP23008
+local flowSensePin = 3 --MCP23008
 local flowMeterPin = 8 --GPIO15
 local pwmPumpPin   = 2 --GPIO4
 local pulseCount=0
@@ -139,14 +140,14 @@ function gpioCB(lev, pul, cnt)
    gpio.trig(flowMeterPin, "up")
 end
 
-function setRunSpeed(pw) -- careful .. this is in pwm units, not %
+function setRunSpeed(pw) -- careful .. this is in pwm units 0 .. 1023 ..  not %
    sendSPI("rPWM", pw)
    pwm.setduty(pwmPumpPin, pw)
    runPWM = pw
 end
 
 oldspd = 0
-function setPumpSpeed(ps)
+function setPumpSpeed(ps) -- this is ps units -- 0 to 100%
    pumpPWM = math.floor(ps*maxPWM/100)
    if pumpPWM < minPWM then pumpPWM = 0 end
    if pumpPWM > 1023 then pumpPWM = maxPWM end
@@ -154,7 +155,10 @@ function setPumpSpeed(ps)
    if pumpPWM ~= oldspd then
       print("pump speed set to", pumpPWM)
    end
-   if runPWM > 0 then runPWM = pumpPWM end
+   if runPWM > 0 then
+      runPWM = pumpPWM
+      setRunSpeed(runPWM)
+   end
    oldspd = pumpPWM
 end
 
@@ -230,6 +234,7 @@ function execCmd(k,v)
       runningTime=0
       pumpStartTime=0
       pumpStopTime=0
+      sendSPI("rTIM", runningTime)
       if textLCD[3] then
 	 lineLCD(3, "Vol ", flowCount, "%.1f", " oz")
 	 lineLCD(4, timeFmt(runningTime))
@@ -239,10 +244,10 @@ function execCmd(k,v)
       --print("calFact passed in:", tonumber(v))
       pulsePerOz = tonumber(v)/100
       gotCalFact = true
-   elseif k == "Pressure" then
-      pressLimit = tonumber(v/10)
+   elseif k == "Press" then
+      pressLimit = tonumber(v)/10.0
       pressLimit = math.max(MINpress, math.min(pressLimit, MAXpress))
-      --print("pL =", pressLimit, v)
+      print("pL =", pressLimit, v)
    else
       print("Command error:", k, v)
    end
@@ -278,7 +283,7 @@ function timerCB()
    sendSPI("fCNT", flowCount)
    local deltaF = (pulseCount - lastPulseCount) / pulsePerOz
    lastPulseCount = pulseCount
-   flowRate = flowRate - (flowRate - (deltaF / deltaT))/4
+   flowRate = flowRate - (flowRate - (deltaF / deltaT))/1.2
    sendSPI("fRAT", flowRate)
    if runPWM > 0 then
       runningTime = math.abs(math.abs(tmr.now()) - math.abs(pumpStartTime)) / 1000000. -- secs
@@ -367,15 +372,9 @@ for i=1,50,1 do
    pressZero = pressZero - (pressZero - adcDiv * adc.read(0) / 1023)/10
 end
 
--- Set up the OLED display panel and put up an initial screen
+-- set the (extended) gpio pin to enable pulses from the flow sensor
 
-init_i2c_display()
-disp:clearBuffer()
-io=2
-cdisp(u8g2.font_profont22_mr, "MedidoPump", 0, 0+io)
-cdisp(u8g2.font_profont17_mr, "BLE v1.0", 0, 20+io)
-cdisp(u8g2.font_profont17_mr, ip, 0, 40+io)
-disp:sendBuffer()
+mcp.gpioWritePin(flowSensePin, 1)
 
 -- Set up the gpio interrupt to catch pulses from the flowmeter
 
@@ -389,12 +388,53 @@ setPumpFwd()
 
 -- See if the BLE module is alive
 
+print("")
+
 rsp=ble.spi_command_check_OK("ATI")
 print("rsp from ATI:")
-print(ret)
+print(rsp)
 
-if ble.spi_connected() then print("connected") else print("not connected") end
+rsp=ble.spi_command_generic("AT+BLEPOWERLEVEL=4")
+print("rsp from AT get power level:")
+print(rsp)
+
+tmr.delay(1000)
+
+rsp=ble.spi_command_check_OK("AT+BLEGETADDR")
+print("rsp from AT ble get addr:")
+print(rsp)
+
+tmr.delay(1000)
+
+local RSSI = "not connected"
+if ble.spi_connected() then
+   print("connected")
+   RSSI = ble.spi_command_check_OK("AT+BLEGETRSSI", 2000)
+   if not RSSI then RSSI = "error" end
+   print("rsp from AT ble get RSSI:")
+   print(RSSI)
+else
+   print("not connected")
+end
+
 print(" ")
+
+
+-- Set up the OLED display panel and put up an initial screen
+
+init_i2c_display()
+disp:clearBuffer()
+io=2
+cdisp(u8g2.font_profont22_mr, "MedidoPump", 0, 0+io)
+cdisp(u8g2.font_profont17_mr, "BLE v1.0", 0, 20+io)
+
+print("#RSSI:", #RSSI)
+RSSI = RSSI:gsub("\n","")
+print("#RSSI:", #RSSI)
+
+print("Signal: " .. RSSI .. " dbm")
+cdisp(u8g2.font_profont17_mr, "BT: " .. RSSI .. " dbm", 0, 40+io)
+disp:sendBuffer()
 
 sendSPI("Init", 0)
 sendSPI("rPWM", 0)

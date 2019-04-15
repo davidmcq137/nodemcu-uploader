@@ -19,10 +19,10 @@ wifi.eventmon.register(wifi.eventmon.STA_GOT_IP, wifiIPcallback)
 --
 -- wifi config start
 local config_tbl={}
---config_tbl.ssid="Mt McQueeney Guest"
---config_tbl.pwd="south18ln"
-config_tbl.ssid="McQphone"
-config_tbl.pwd="Hydro137Ponic"
+config_tbl.ssid="Mt McQueeney Guest"
+config_tbl.pwd="south18ln"
+--config_tbl.ssid="McQphone"
+--config_tbl.pwd="Hydro137Ponic"
 config_tbl.save=true
 config_tbl.auto=true
 --
