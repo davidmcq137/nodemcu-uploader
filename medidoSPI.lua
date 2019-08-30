@@ -4,6 +4,10 @@ medido pump
 
 this version to work with Adafruit BlueFruitSPI BLE module
 
+Possible issues:
+
+1) run in pid mode, e.g. pump speed at 76% but slider at 100% (as expected), then stop and raise PSI limit with PSI slider but pump speed stays at 76%
+
 --]]
 
 
@@ -14,14 +18,15 @@ ads = require "adc1115"
 -- globals seen by all subsystems
 
 medidoEnabled = true 
-PIDpGain = 1
-PIDiGain = 10
+PIDpGain = 0.01
+PIDiGain = 4
 PIDpTerm = 0
 PIDiTerm = 0
 MINpress = 0
 MAXpress = 10
 pressLimit = (MAXpress + MINpress)/2
-
+pulsePerOz = 77.6
+fFactor = -0.010
 -- end globals
 
 local dispRstPin   = 1 --MCP23008
@@ -33,7 +38,6 @@ local pulseCount=0
 local flowRate=0
 local lastPulseCount=0
 local lastFlowTime=0
-local pulsePerOz=77.6
 local pressZero
 local pressScale=3.75
 local adcDiv=5.7 -- resistive divider in front of adc   
@@ -153,7 +157,7 @@ function setPumpSpeed(ps) -- this is ps units -- 0 to 100%
    if pumpPWM > 1023 then pumpPWM = maxPWM end
    sendSPI("pPWM", pumpPWM)
    if pumpPWM ~= oldspd then
-      print("pump speed set to", pumpPWM)
+      --print("pump speed set to", pumpPWM)
    end
    if runPWM > 0 then
       runPWM = pumpPWM
@@ -166,8 +170,8 @@ function setPumpFwd()
    mcp.gpioWritePin(flowDirPin, 0)
    pumpFwd=true
    PIDiTerm = saveSetSpeed
-   print("setPumpFwd:", pumpPWM)
-   print("PIDiTerm:", saveSetSpeed)
+   --print("setPumpFwd:", pumpPWM)
+   --print("PIDiTerm:", saveSetSpeed)
    if pumpPWM > 0 then -- just turned on .. note startime
       print("pump start fwd")
       pumpStartTime = tmr.now()
@@ -271,6 +275,7 @@ end
 
 local seq=0
 local dt
+local adcAvg=0
 
 function timerCB()
    local msgtype, rspid, rsp
@@ -279,7 +284,19 @@ function timerCB()
    local deltaT = math.abs(math.abs(now) - math.abs(lastFlowTime)) / (1000000. * 60.) -- mins
    tmr.stop(watchTimer)
    lastFlowTime = now
-   flowCount = pulseCount / pulsePerOz
+
+   adcAvg = adcAvg - (adcAvg-adc.read(0)) / 4.0 -- running avg of adc readings
+   pressPSI = ((adcDiv*adcAvg/1023)-pressZero) * (pressScale)
+   sendSPI("pPSI", pressPSI)
+
+   if pressPSI < 0 then pressPSI = 0 end
+      
+   flowCount = pulseCount / (pulsePerOz + pulsePerOz * fFactor * (5 - pressPSI)/5 ) -- fFactor is a fudge factor noted when draining tanks with press reading of 0 vs 5psi
+
+   if seq % 30 == 0 then
+      print("ppo, ppo(corr), pPsi", pulsePerOz, pulsePerOz + pulsePerOz * fFactor * (5-pressPSI)/5, pressPSI)
+   end
+   
    sendSPI("fCNT", flowCount)
    local deltaF = (pulseCount - lastPulseCount) / pulsePerOz
    lastPulseCount = pulseCount
@@ -292,8 +309,6 @@ function timerCB()
    end
    sendSPI("rTIM", runningTime)
    
-   pressPSI = ((adcDiv*adc.read(0)/1023)-pressZero) * (pressScale)
-   sendSPI("pPSI", pressPSI)
 
    if pumpFwd and runPWM > 0 and (PIDiGain ~= 0 or PIDpGain ~= 0) then
       errsig  = pressLimit - pressPSI
@@ -317,12 +332,11 @@ function timerCB()
    dt = (tmr.now() - now) / 1000
 
    seq = seq + 1
-   if seq > 10 then
-      seq = 0
+   if seq % 100 == 0 then
       local v1 = ads.readAdc(1)
       sendSPI("volt1", v1)
       sendSPI("Heap", node.heap()/1000.)
-      --print("Heap, dt(ms):", node.heap(), dt)
+      print("Heap, dt(ms), volt1:", node.heap(), dt, v1)
    end
 
    -- check SPI for commands coming in from app
