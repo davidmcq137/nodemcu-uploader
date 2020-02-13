@@ -227,7 +227,7 @@ function read()
 	 disp:drawDisc(120, 10, 2)
       else
 	 text = string.format("%3.1f", avg)
-	 disp:drawDisc(120, 10, 2, seq[iseq])
+ 	 disp:drawDisc(120, 10, 2, seq[iseq])
 	 if iseq == #seq then
 	    iseq = 1
 	 else

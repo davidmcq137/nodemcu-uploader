@@ -2,15 +2,33 @@
 
 medido_nopump.lua
 
-simple version of flow counter only, no pump control or pressure sensor or PID loop
+simple version of flow counter only, no pump control, pressure sensor
+or PID loop
 
-assumes use of Bio-Rad FCH-m-POM-LC flowmeter, Adafruit 2471 ESP8266 Huzzah processor
-and Adafruit 1400 power switch
+assumes use of Bio-Rad FCH-m-POM-LC flowmeter, Adafruit 2471 ESP8266
+processor and Adafruit 1400 power switch
 
-designed for battery power with 4xAA. current consumption is a little over 100ma, given
-that AA cells are about 2000-2500 maH this is 20+hrs of service
+designed for battery power with 4xAA. current consumption is a little
+over 100ma, given that AA cells are about 2000-2500 maH this is 20+hrs
+of service
 
 times out and goes to sleep after <sleepMins> mins if no flow measured
+sensible range for <sleepMins> is 5-10 mins
+
+accumulates running time and total flow as long as it stays awake. can
+reset time and flow on front panel
+
+holding down reset button while booting bypasses init.lua and allows
+communication via UART with FTDI cable e.g. for code updates
+
+kero flow path plumbed with two one-way valves ... one thru flow
+sensor in the correct dir, one in the opposite direction bypassing the
+flow meter
+
+since there is no way to know flow direction if we are not running the
+pump, it does not make sense to use "diode bridge" of 4 one-way valves
+approach of the full medido pump - done this way it only measures in
+the correct direction, but allows flow in the opposite direction
 
 DFM Aug 2019
 
@@ -34,8 +52,9 @@ local pumpStopTime = 0
 local pulseCount=0
 local lastPulseCount=0
 local lastFlowTime=0
-local pulsePerOz=77.6
+local pulsePerOz=77.0 --nominal: 77.6 -- should calibrate for each flowmeter individually
 local flowRate=0
+local dispRate=0
 local pumpFwd=true
 local sleepTimer
 
@@ -106,6 +125,7 @@ function timerCB()
    deltaF = (pulseCount - lastPulseCount) / pulsePerOz
    lastPulseCount = pulseCount
    flowRate = deltaF / deltaT
+   dispRate = dispRate - (dispRate - (deltaF / deltaT)) / 4
    
    if flowRate > minFlowRate and not running then
       -- do accumTime based on last stop and start before resetting start time
@@ -132,9 +152,9 @@ function timerCB()
    else
       local min = math.floor(rt/60)
       local sec = math.floor(rt-60*min)
-      cdisp(u8g2.font_profont17_mr, string.format("Tim %2d:%02d min",  min, sec), 1, 15+io)
+      cdisp(u8g2.font_profont17_mr, string.format("Tim %d:%02d min",  min, sec), 1, 15+io)
    end
-   cdisp(u8g2.font_profont17_mr, string.format("Flw %.1f oz/m", flowRate), 1, 30+io)
+   cdisp(u8g2.font_profont17_mr, string.format("Flw %.1f oz/m", dispRate), 1, 30+io)
    if running then
       iseq = iseq + 1
       disp:drawDisc(12, 55+io, 5, seq[iseq % 4 + 1])
@@ -166,7 +186,7 @@ init_i2c_display() -- uses (5,6) GPIO14,GPIO12
 disp:clearBuffer()
 io=2
 cdisp(u8g2.font_profont22_mr, "KeroMeter", 0, 0+io)
-cdisp(u8g2.font_profont17_mr, "Version 1.0", 0, 25+io)
+cdisp(u8g2.font_profont17_mr, string.format("Cal: %2.2f", pulsePerOz), 0, 25+io)
 cdisp(u8g2.font_profont17_mr, "DFM/2019", 0, 45+io)
 disp:sendBuffer()
 

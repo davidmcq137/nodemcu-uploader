@@ -24,7 +24,7 @@ local adc1115 = {}
 local dev_addr = 0x48
 local lastMux=-1
 
-function adc1115.readAdc(aN)
+function readAdc(aN)
    -- if mux has not changed since last read, we can read once
    -- read again if we had to change it .. can't get stable
    -- reading on the same transaction that changes the mux
@@ -108,7 +108,6 @@ function readAdcI(aN)
 end
 
 
---[[ 
 
 --test code
 
@@ -146,7 +145,7 @@ while true do
    t1 = tmr.now()
 
    print(ii,
-	 string.format("%.4f", v0),
+	 string.format("%.4f", v0*7.478),
 	 string.format("%.4f", v1),
 	 string.format("%.4f", v2),
 	 string.format("%.4f", v3),
@@ -156,4 +155,3 @@ end
 
 --]]
 
-return adc1115
