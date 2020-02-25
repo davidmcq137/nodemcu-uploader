@@ -11,7 +11,6 @@ Possible issues:
 --]]
 
 
-mcp = require "mcp23008"
 ads = require "adc1115"
 
 -- globals seen by all subsystems
@@ -24,27 +23,34 @@ PIDiTerm = 0
 MINpress = 0
 MAXpress = 10
 pressLimit = (MAXpress + MINpress)/2
-pulsePerOz = 77.6
 pulsePerOzFill = 100.0
 pulsePerOzEmpty = 100.0
 
 -- end globals
 
-local dispRstPin   = 1 --MCP23008
-local flowDirPin   = 2 --MCP23008
-local flowSensePin = 3 --MCP23008
-local flowMeterPin = 8 --GPIO15
-local pwmPumpPin   = 2 --GPIO4
-local pulseCount=0
+local dispRstPin        = 0 --GPIO 16
+local flowDirPin        = 8 --GPIO 15
+local flowMeterPinFill  = 6 --GPIO 12
+local flowMeterPinEmpty = 7 --GPIO 13
+local flowMeterPinStop  = 5 --GPIO 14
+local pwmPumpPin        = 2 --GPIO 4
+local powerDownPin      = 1 --GPIO 5 also used to interrupt boot seq if held high on startup
+
+local pulseCountFill=0
+local pulseCountEmpty=0
+local pulseCountStop=0
+local pulseCountBad=0
+local pulseStop = 10 -- set # pulses to stop pump on piss tank sensor
 local flowRate=0
-local lastPulseCount=0
+local lastPulseCountFill=0
+local lastPulseCountEmpty=0
+local lastPulseCountBad=0
 local lastFlowTime=0
 local pressZero
 local pressScale=3.75
-local adcDiv=5.7 -- resistive divider in front of adc   
+local adcDiv=5.7 -- resistive divider in front of ESP8266 adc from pressure sensor
 local minPWM = 50
 local maxPWM = 1023
-local lastPWM = 0
 local pumpPWM = 0
 local runPWM = 0
 local pressPSI = 0
@@ -57,7 +63,8 @@ local runningTime = 0
 local flowCount  = 0
 local pumpTimer
 local watchTimer
-
+local powerOffTimer
+local powerOffMins = 30
 local dw=128
 local dh=64
 
@@ -76,11 +83,11 @@ function init_i2c_display()
    -- we assume i2c.setup already called
    -- first do a clean reset of the display driver
 
-   mcp.gpioWritePin(dispRstPin, 1)
+   gpio.write(dispRstPin, 1)
    tmr.delay(200)
-   mcp.gpioWritePin(dispRstPin, 0)
+   gpio.write(dispRstPin, 0)
    tmr.delay(200)
-   mcp.gpioWritePin(dispRstPin, 1)
+   gpio.write(dispRstPin, 1)
    tmr.delay(200)
 
    -- now set up the api calls
@@ -134,16 +141,36 @@ function showLCD()
    disp:sendBuffer()
 end
 
-function gpioCB(lev, pul, cnt)
+function gpioCBFill(lev, pul, cnt)
    if pumpFwd then
-      pulseCount=pulseCount + cnt
+      pulseCountFill = pulseCountFill + cnt
    else
-      pulseCount=pulseCount - cnt
+      pulseCountBad = pulseCountBad + cnt
    end
-   gpio.trig(flowMeterPin, "up")
+end
+
+function gpioCBEmpty(lev, pul, cnt)
+   if not pumpFwd then
+      pulseCountEmpty = pulseCountEmpty + cnt
+   else
+      pulseCountBad = pulseCountBad + cnt
+   end
+end
+
+function gpioCBStop(lev, pul, cnt)
+   -- code to stop goes here
+   pulseCountStop = pulseCountStop + cnt
+end
+
+function sendSPI(str, val)
+   if not val then return end
+   uart.write(0, string.format("("..str..":%4.2f)", val))
 end
 
 function setRunSpeed(pw) -- careful .. this is in pwm units 0 .. 1023 ..  not %
+   pulseCountBad = 0
+   lastPulseCountBad = 0
+
    sendSPI("rPWM", pw)
    pwm.setduty(pwmPumpPin, pw)
    runPWM = pw
@@ -151,6 +178,7 @@ end
 
 oldspd = 0
 function setPumpSpeed(ps) -- this is ps units -- 0 to 100%
+   
    pumpPWM = math.floor(ps*maxPWM/100)
    if pumpPWM < minPWM then pumpPWM = 0 end
    if pumpPWM > 1023 then pumpPWM = maxPWM end
@@ -166,124 +194,116 @@ function setPumpSpeed(ps) -- this is ps units -- 0 to 100%
 end
 
 function setPumpFwd()
-   mcp.gpioWritePin(flowDirPin, 0)
+   gpio.write(flowDirPin, 0)
    pumpFwd=true
-   pulsePerOz = pulsePerOzFill
    PIDiTerm = saveSetSpeed
-   --print("setPumpFwd:", pumpPWM)
-   --print("PIDiTerm:", saveSetSpeed)
+   pulseCountStop = 0 -- reset piss tank flow sensor
    if pumpPWM > 0 then -- just turned on .. note startime
-      --print("pump start fwd")
       pumpStartTime = tmr.now()
    end
    setRunSpeed(pumpPWM)
-   --print("Pump Running Fwd")
 end
 
 function setPumpRev()
-   mcp.gpioWritePin(flowDirPin, 1)
+   gpio.write(flowDirPin, 1)
    pumpFwd=false
-   pulsePerOz = pulsePerOzEmpty
    PIDiTerm = 0
-   --print("setPumpRev:", pumpPWM)
+   pulseCountStop = 0 -- reset piss tank flow sensor
    if pumpPWM > 0 then -- just turned on .. note startime
-      --print("pump start rev")
       pumpStartTime = tmr.now()
    end
    setRunSpeed(pumpPWM)
-   --print("Pump Running Rev")
 end
 
 function watchDog(T)
-   --print("***watchDog***", T)
+
+end
+
+function powerCB(T)
+   print("Powering down .. timeout")
+   sendSPI("PowerDown")
+   gpio.write(powerDownPin, 1)   
 end
 
 function execCmd(k,v)
 
-   --print("execCmd: k, v", k, v)
+
+   -- each time we get any command, restart the poweroff timer
+   -- maybe could do tmr.interval(powerOffTimer, powerOffMins*60*1000) instead
+   -- of unregistering and registering?
    
-   if k =="Speed" then -- what change was it?
+   tmr.stop(powerOffTimer)
+   tmr.unregister(powerOffTimer)
+   powerOffTimer = tmr.create()
+   tmr.register(powerOffTimer, powerOffMins*60*1000, tmr.ALARM_SINGLE, powerCB)
+   tmr.start(powerOffTimer)   
+   
+   if k =="Spd" then -- what change was it?
       saveSetSpeed = tonumber(v)
       setPumpSpeed(saveSetSpeed)
       if saveSetSpeed == 0 then
-	 lineLCD(1, "Pump Off")
+	 --lineLCD(1, "Pump Off")
       end
-      lineLCD(2, "Set Spd", saveSetSpeed, "%d", "%")
-      showLCD()
+      --lineLCD(2, "Set Spd", saveSetSpeed, "%d", "%")
+      --showLCD()
    elseif k == "Fill" then
       setPumpFwd()
-      lineLCD()
-      lineLCD(1, "Fill")
-      lineLCD(2, "Set Spd ", saveSetSpeed, "%d", "%")
-      showLCD()
+      --lineLCD()
+      --lineLCD(1, "Fill")
+      --lineLCD(2, "Set Spd ", saveSetSpeed, "%d", "%")
+      --showLCD()
    elseif k == "Off" then
-      setRunSpeed(0)
       --print("pump stop")
+      setRunSpeed(0)
       pumpStopTime = tmr.now()
-      lineLCD(1, "Pump Off")
-      lineLCD(2, "Set Spd ", saveSetSpeed, "%d", "%")
-      lineLCD(3, "Vol ", flowCount, "%.1f", " oz")
-      lineLCD(4, timeFmt(runningTime))
-      showLCD()
+      --lineLCD(1, "Pump Off")
+      --lineLCD(2, "Set Spd ", saveSetSpeed, "%d", "%")
+      --lineLCD(3, "Vol ", flowCount, "%.1f", " oz")
+      --lineLCD(4, timeFmt(runningTime))
+      --showLCD()
    elseif k == "Empty" then
       setPumpRev()
-      lineLCD()
-      lineLCD(1, "Empty")
-      lineLCD(2, "Set Spd ", saveSetSpeed, "%d", "%")
-      showLCD()
-   elseif k == "Clear" then -- ? why 1?  and tonumber(v) == 1 then
-      --print("Clear")
-      pulseCount = 0
-      lastPulseCount=0
+      --lineLCD()
+      --lineLCD(1, "Empty")
+      --lineLCD(2, "Set Spd ", saveSetSpeed, "%d", "%")
+      --showLCD()
+   elseif k == "Clear" then
+      pulseCountFill = 0
+      pulseCountEmpty = 0
+      pulseCountBad = 0
+
+      lastPulseCountFill=0
+      lastPulseCountEmpty=0
+      lastPulseCountBad = 0
+
       flowCount=0
       runningTime=0
       pumpStartTime=0
       pumpStopTime=0
       sendSPI("rTIM", runningTime)
-      if textLCD[3] then
-	 lineLCD(3, "Vol ", flowCount, "%.1f", " oz")
-	 lineLCD(4, timeFmt(runningTime))
-	 showLCD()
-      end
-   elseif k == "CalFactFill" then
-      --print("calFact passed in:", tonumber(v))
+      --if textLCD[3] then
+	-- lineLCD(3, "Vol ", flowCount, "%.1f", " oz")
+	-- lineLCD(4, timeFmt(runningTime))
+	-- showLCD()
+      --end
+   elseif k == "CalF" then
+      --print("CalFactFill passed in:", tonumber(v))
       pulsePerOzFill = tonumber(v)/10
-   elseif k == "CalFactEmpty" then
+   elseif k == "CalE" then
+      --print("CalFactEmpty passed in:", tonumber(v))
       pulsePerOzEmpty = tonumber(v)/10
-   elseif k == "Press" then
+   elseif k == "Prs" then
       pressLimit = tonumber(v)/10.0
       pressLimit = math.max(MINpress, math.min(pressLimit, MAXpress))
       --print("pL =", pressLimit, v)
+   elseif k == "PwrOff" then
+      gpio.write(powerDownPin, 1)
    else
       --print("Command error:", k, v)
    end
    
-   --local tn = tmr.now()
-   --drawLCD(runningTime, flowRate, pressPSI, pulseCount, pumpPWM)
-   --local dt = (tmr.now() - tn)/1000
-
    if not seq then seq = 0 end
    
-end
-
-function sendAT(str)
-   uart.write(0, str)
-end
-
-function sendSPI(str, val)
-   if not val then return end
-   uart.write(0, string.format("("..str..":%4.2f)", val))
-end
-
-local ATreply
-
-function ATcmdCB(data)
-   --print("in ATcmdCB - data: "..data)
-   if not ATreply then
-      ATreply = data
-   else
-      ATreply = ATreply .. "|" .. data
-   end
 end
 
 function uartCB(data)
@@ -291,49 +311,72 @@ function uartCB(data)
    -- commands of the form "(Command:Val)\n"
    -- pickup one per callback cycle and execute it
    local k,v
-   --print("data: "..data)
    k,v = string.match(data, "(%a+)%s*%p*%s*(%d*)")
-   --print("k,v:", k, v)
    execCmd(k,v)
 end
 
 
 local seq=0
-local dt
 local adcAvg=0
 
 function timerCB()
    local msgtype, rspid, rsp
    local pSpd, errsig
-   local now = tmr.now()
-   local deltaT = math.abs(math.abs(now) - math.abs(lastFlowTime)) / (1000000. * 60.) -- mins
-   tmr.stop(watchTimer)
-   lastFlowTime = now
-
+   local deltaFFill, deltaFEmpty, deltaF
+   local now
+   local deltaT
+   local dtus
+   
+   if watchTimer then tmr.stop(watchTimer) end
+   
+   -- send the app a message if we get #pulses > pulseStop  at piss tank sensor
+   
+   if pulseCountStop > pulseStop then
+      sendSPI("pSTP", pulseCountStop)
+      pulseCountStop = 0
+   end
+   
    adcAvg = adcAvg - (adcAvg-adc.read(0)) / 4.0 -- running avg of adc readings
    pressPSI = ((adcDiv*adcAvg/1023)-pressZero) * (pressScale)
    sendSPI("pPSI", pressPSI)
 
    if pressPSI < 0 then pressPSI = 0 end
       
-   flowCount = pulseCount / pulsePerOz
+   flowCount = (pulseCountFill / pulsePerOzFill) - (pulseCountEmpty / pulsePerOzEmpty)
 
-   if seq % 30 == 0 then
-      --print("ppo, ppo(corr), pPsi", pulsePerOz, pulsePerOz + pulsePerOz * fFactor * (5-pressPSI)/5, pressPSI)
+   sendSPI("fCNT", flowCount)
+
+   if pulseCountBad ~= lastPulseCountBad then
+      sendSPI("cBAD", pulseCountBad)
+      lastPulseCountBad = pulseCountBad
    end
    
-   sendSPI("fCNT", flowCount)
-   local deltaF = (pulseCount - lastPulseCount) / pulsePerOz
-   lastPulseCount = pulseCount
-   flowRate = flowRate - (flowRate - (deltaF / deltaT))/1.2
-   sendSPI("fRAT", flowRate)
+   now = tmr.now()
+   dtus = now - lastFlowTime
+   if dtus < 0 then dtus = dtus + 2147483647 end -- in case of rollover
+   if dtus > 1000000 then
+      deltaT = dtus / (1000000. * 60.) -- mins
+      deltaFFill = (pulseCountFill - lastPulseCountFill) / pulsePerOzFill
+      deltaFEmpty = (pulseCountEmpty - lastPulseCountEmpty) / pulsePerOzEmpty   
+      deltaF = deltaFFill - deltaFEmpty
+      flowRate = flowRate - (flowRate - (deltaF / deltaT))/1.2
+      sendSPI("fRAT", flowRate)
+      sendSPI("fDEL", deltaF)
+      sendSPI("fDET", deltaT)
+      lastPulseCountFill = pulseCountFill
+      lastPulseCountEmpty = pulseCountEmpty   
+      lastFlowTime = now
+   end
+   
    if runPWM > 0 then
       runningTime = math.abs(math.abs(tmr.now()) - math.abs(pumpStartTime)) / 1000000. -- secs
    else
       runningTime = math.abs(math.abs(pumpStopTime) - math.abs(pumpStartTime)) / 1000000.
    end
-   sendSPI("rTIM", runningTime)
+
+   -- don't send time if pump not on .. confuses graph on iPhone
    
+   if runPWM ~= 0 then sendSPI("rTIM", runningTime) end
 
    if pumpFwd and runPWM > 0 and (PIDiGain ~= 0 or PIDpGain ~= 0) then
       errsig  = pressLimit - pressPSI
@@ -348,60 +391,36 @@ function timerCB()
    end
    
    if medidoEnabled then
-      watchTimer=tmr.create()
-      tmr.register(watchTimer, 2000, tmr.ALARM_SINGLE, watchDog)
       tmr.start(watchTimer)
       tmr.start(pumpTimer)
    end
    
-   dt = (tmr.now() - now) / 1000
-
    seq = seq + 1
-   if seq % 100 == 0 then
-      local v1 = ads.readAdc(1)
-      sendSPI("volt1", v1)
-      sendSPI("Heap", node.heap()/1000.)
-      --print("Heap, dt(ms), volt1:", node.heap(), dt, v1)
+   if seq % 10 == 0 then
+      sendSPI("Batt",ads.readAdc(0))
    end
 
 end
-
 
 -- Main prog and init seciton starts here
 
 -- First init the UART to talk BLE to the app
 
 uart.setup(0, 9600, 8, uart.PARITY_NONE, uart.STOPBITS_1, 0)
-
--- Set up callback function for commands coming back from BLE
-
---print("*******************************UART set up")
-
 uart.on("data","\n", uartCB, 0)
 
---sendAT("AT+BLEGETADDR\r\n")
-
---sendAT("AT+BLEGETRSSI\r\n")
-
--- now switch the BLE device to UART mode and set up the uart callback
-
---sendAT("+++\r\n")
-
---if not ATreply then ATreply = "nil" end
-
---print("ATreply: "..ATreply)
+--uart.write(0, "AT\n")
+--uart.write(0,"AT+BLEPOWERLEVEL=4\r\n")
+--uart.write(0,"AT+BLEGETADDR\n")
+--uart.write(0,"AT+BLEGETRSSI\n")
 
 -- Initialize the i2c bus
 
 local sda, scl = 4, 3
 
----i2c.setup(0, sda, scl, i2c.SLOW)
+i2c.setup(0, sda, scl, i2c.SLOW)
 
--- Set up the MCP23008 GPOI extender to all 8 pins as outputs
-
----mcp.gpioSetIOdir(0x00) -- set MCP23008 gpio extender to all outputs
-
--- Start 1KHz pwm signal to drive pump
+-- Set up 1KHz pwm signal to drive pump
 
 pwm.setup(pwmPumpPin, 1000, 0)
 pwm.setduty(pwmPumpPin, 0)
@@ -414,55 +433,27 @@ for i=1,50,1 do
    pressZero = pressZero - (pressZero - adcDiv * adc.read(0) / 1023)/10
 end
 
--- set the (extended) gpio pin to enable pulses from the flow sensor
+-- Set up the gpio interrupt to catch pulses from the flowmeters
 
----mcp.gpioWritePin(flowSensePin, 1)
+gpio.mode(flowMeterPinFill, gpio.INT)
+gpio.trig(flowMeterPinFill, "down", gpioCBFill)
 
--- Set up the gpio interrupt to catch pulses from the flowmeter
+gpio.mode(flowMeterPinEmpty, gpio.INT)
+gpio.trig(flowMeterPinEmpty, "down", gpioCBEmpty)
 
-gpio.mode(flowMeterPin, gpio.INT)
-gpio.trig(flowMeterPin, "up", gpioCB)
+gpio.mode(flowMeterPinStop, gpio.INT)
+gpio.trig(flowMeterPinStop, "down", gpioCBStop)
 
 -- Preset pump speed to 0, set FWD direction
 
+gpio.mode(flowDirPin, gpio.OUTPUT)
 setPumpSpeed(0)
 setPumpFwd()
 
--- See if the BLE module is alive
+-- Setup power down pin, taking it high turns off the pump
 
---print("**********************************************************************")
-
----rsp=ble.spi_command_check_OK("ATI")
----print("rsp from ATI:")
----print(rsp)
-
----rsp=ble.spi_command_generic("AT+BLEPOWERLEVEL=4")
----print("rsp from AT get power level:")
----print(rsp)
-
----tmr.delay(1000)
-
----rsp=ble.spi_command_check_OK("AT+BLEGETADDR")
----print("rsp from AT ble get addr:")
----print(rsp)
-
----tmr.delay(1000)
-
---[[
-local RSSI = "not connected"
-if ble.spi_connected() then
-   print("connected")
-   RSSI = ble.spi_command_check_OK("AT+BLEGETRSSI", 2000)
-   if not RSSI then RSSI = "error" end
-   print("rsp from AT ble get RSSI:")
-   print(RSSI)
-else
-   print("not connected")
-end
---]]
-
---print(" ")
-
+gpio.mode(powerDownPin, gpio.OUTPUT)
+gpio.write(powerDownPin, 0)
 
 -- Set up the OLED display panel and put up an initial screen
 
@@ -471,14 +462,6 @@ end
 ---io=2
 ---cdisp(u8g2.font_profont22_mr, "MedidoPump", 0, 0+io)
 ---cdisp(u8g2.font_profont17_mr, "BLE v1.0", 0, 20+io)
-
----print("#RSSI:", #RSSI)
----RSSI = RSSI:gsub("\n","")
----print("#RSSI:", #RSSI)
-
----print("Signal: " .. RSSI .. " dbm")
----cdisp(u8g2.font_profont17_mr, "BT: " .. RSSI .. " dbm", 0, 40+io)
----disp:sendBuffer()
 
 sendSPI("Init", 0)
 sendSPI("rPWM", 0)
@@ -489,8 +472,13 @@ pumpTimer=tmr.create()
 tmr.register(pumpTimer, 200, tmr.ALARM_SEMI, timerCB)
 tmr.start(pumpTimer)
 
--- Create a watchdog in case the mainloop hangs
+-- Create a timer for poweroff
+
+powerOffTimer = tmr.create()
+tmr.register(powerOffTimer, powerOffMins*60*1000, tmr.ALARM_SINGLE, powerCB)
+tmr.start(powerOffTimer)
+
+-- Set up watchdog timer, let the callback loop start it
 
 watchTimer=tmr.create()
 tmr.register(watchTimer, 2000, tmr.ALARM_SINGLE, watchDog)
-tmr.start(watchTimer)

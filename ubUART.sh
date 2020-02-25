@@ -12,4 +12,4 @@ python nodemcu-uploader.py --port /dev/ttyUSB0 --baud 115200 upload reload2.lua:
 python nodemcu-uploader.py --port /dev/ttyUSB0 --baud 115200 upload start1UART.lua:start1UART.lua
 python nodemcu-uploader.py --port /dev/ttyUSB0 --baud 115200 exec reload2.lua
 #
-putty /dev/ttyUSB0 -serial -sercfg 115200 -geometry 120x80
+putty /dev/ttyUSB0 -serial -sercfg 9600 -geometry 120x80
