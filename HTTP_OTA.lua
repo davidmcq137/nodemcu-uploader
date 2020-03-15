@@ -4,8 +4,10 @@
 -- that is unencrypted and unsigned. But the loader does validate that
 -- the image file is a valid and complete LFS image before loading.
 --
-
-local host, dir, image = "10.0.0.48", "/", "lfs.img"
+-- http://dl.dropboxusercontent.com/s/3az2gndokyvbw2o/LFS.img?dl=0
+--
+local host, dir, image = "10.0.0.48", "/", "LFS.img"
+--local host, dir, image = "dl.dropboxusercontent.com", "/s/3az2gndokyvbw2o/LFS.image?dl=", "LFS.img"
 local hostsocket = 8080
 local doRequest, firstRec, subsRec, finalise
 local n, total, size = 0, 0
@@ -28,7 +30,7 @@ doRequest = function(sk,hostIP)
 		      "Host: "..host,
 		      "Connection: close", 
 		      "", "", }, "\r\n")
-		print(request)
+		print("request:" .. request)
 		sck:send(request)
 		sck:on("receive",firstRec)
       end)
@@ -58,7 +60,7 @@ firstRec = function (sck,rec)
 
    if size > 0 then
       sck:on("receive",subsRec)
-      file.open(image, 'w')
+      file.open("DL-"..image, 'w')
       subsRec(sck, rec:sub(i+4))
    else
       sck:on("receive", nil)
@@ -89,14 +91,14 @@ finalise = function(sck)
     -- run as separate task to maximise RAM available
     print("")
     print("Preparing to flashreload:", image)
-    node.task.post(function() node.flashreload(image) end)
+    --node.task.post(function() node.flashreload(image) end)
   else
     print"Invalid save of image file"
   end
 end
 
 print("WiFi OTA Start with host, socket=", host, hostsocket)
-print("medidoEnabled:", medidoEnabled)
+--print("medidoEnabled:", medidoEnabled)
 medidoEnabled = false
 
 net.dns.resolve(host, doRequest)

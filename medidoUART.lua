@@ -49,8 +49,10 @@ local lastFlowTime=0
 local pressZero
 local pressScale=3.75
 local adcDiv=5.7 -- resistive divider in front of ESP8266 adc from pressure sensor
+local currentZero = 0
 local minPWM = 50
 local maxPWM = 1023
+local opPWM = maxPWM
 local pumpPWM = 0
 local runPWM = 0
 local pressPSI = 0
@@ -179,9 +181,9 @@ end
 oldspd = 0
 function setPumpSpeed(ps) -- this is ps units -- 0 to 100%
    
-   pumpPWM = math.floor(ps*maxPWM/100)
+   pumpPWM = math.floor(ps*opPWM/100)
    if pumpPWM < minPWM then pumpPWM = 0 end
-   if pumpPWM > 1023 then pumpPWM = maxPWM end
+   if pumpPWM > maxPWM then pumpPWM = maxPWM end
    sendSPI("pPWM", pumpPWM)
    if pumpPWM ~= oldspd then
       --print("pump speed set to", pumpPWM)
@@ -298,6 +300,10 @@ function execCmd(k,v)
       --print("pL =", pressLimit, v)
    elseif k == "PwrOff" then
       gpio.write(powerDownPin, 1)
+   elseif k == "pMAX" then
+      opPWM = tonumber(v)
+      if opPWM > maxPWM then opPWM = maxPWM end -- just in case...
+      if opPWM < minPWM then opPWM = minPWM end
    else
       --print("Command error:", k, v)
    end
@@ -326,6 +332,7 @@ function timerCB()
    local now
    local deltaT
    local dtus
+   local ar
    
    if watchTimer then tmr.stop(watchTimer) end
    
@@ -397,17 +404,22 @@ function timerCB()
    
    seq = seq + 1
    if seq % 10 == 0 then
-      sendSPI("Batt",ads.readAdc(0))
+      sendSPI("Batt", ads.readAdc(0) or 0)
    end
+   if seq % 5 == 0 then
+      sendSPI("Curr", 100 * ((ads.readAdc(1, 4) or 0) - currentZero) )
+   end
+   
 
 end
 
 -- Main prog and init seciton starts here
 
 -- First init the UART to talk BLE to the app
-
 uart.setup(0, 9600, 8, uart.PARITY_NONE, uart.STOPBITS_1, 0)
 uart.on("data","\n", uartCB, 0)
+
+--uart.write(0, "starting 9600 baud")
 
 --uart.write(0, "AT\n")
 --uart.write(0,"AT+BLEPOWERLEVEL=4\r\n")
@@ -424,6 +436,14 @@ i2c.setup(0, sda, scl, i2c.SLOW)
 
 pwm.setup(pwmPumpPin, 1000, 0)
 pwm.setduty(pwmPumpPin, 0)
+
+-- Get a zero cal point on the current sensor
+
+for i = 1, 10, 1 do
+   currentZero = currentZero + (ads.readAdc(1, 4) or 0)
+end
+
+currentZero = currentZero / 10.0
 
 -- Get a zero cal point on the pressure transducer
 

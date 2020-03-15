@@ -23,16 +23,19 @@ default i2c addr for the adafruit part is 0x48
 local adc1115 = {}
 local dev_addr = 0x48
 local lastMux=-1
+local lastGain=-1
 
-function adc1115.readAdc(aN)
+function adc1115.readAdc(aN, gNp)
    -- if mux has not changed since last read, we can read once
    -- read again if we had to change it .. can't get stable
    -- reading on the same transaction that changes the mux
-   vv = readAdcI(aN)
-   if lastMux ~= aN then
-      vv = readAdcI(aN)
+   -- caution: maybe same on gain?
+   vv = readAdcI(aN, gNp)
+   if lastMux ~= aN or lastGain ~= gNp then
+      vv = readAdcI(aN, gNp)
    end
    lastMux=aN
+   lastGain=gNp
    return vv
 end
 
@@ -41,14 +44,13 @@ local function b2i(b1,b2) -- handle signed int from 2's complement
    if n >= 32768 then return n-65536 else return n end
 end
 
-function readAdcI(aN)
+function readAdcI(aN, gNp)
 
    -- works for TI ads1115 and ads1015 a/d converts with 4-input mux
    -- dev_addr is i2c address (e.g. 0x48)
    -- aN is analog input: 0 for A0, 1 for A1 etc
    -- fcn returns voltage read on mux input specified by aN
    -- assumes we will use single-ended conversions only
-   -- assumes we will want default full scale (2.048V) only
    -- tmr.delay()s inserted to stop nodemcu from crashing...go figure
    -- overall per conversion for ads1115 (16 bits): 10ms
    -- overall per conversion for ads1015 (12 bits): 0.8 ms
@@ -58,9 +60,15 @@ function readAdcI(aN)
    local ww, ack
    local ap_reg_config=0x01
    local ap_reg_conversion=0x00
-   local inputCode={0xc5, 0xd5, 0xe5, 0xf5}
-
-
+   local inputCode={0xc1, 0xd1, 0xe1, 0xf1}
+   local gainCode ={0x02, 0x04, 0x06, 0x08, 0x0a}
+   -- Gain: 001 is 4.096, 010 is 2.048, 011 is 1.024, 100 is 0.512, 101 is .256 +/- full scale
+   local gainMult ={4.096, 2.048, 1.024, 0.512, 0.256}
+   local gN
+   local adcCode
+   
+   if gNp == nil then gN = 1 else gN = gNp end -- default is scale  +/- 2.048V 
+   
    -- first, set configuration, then initiate conversion
    -- see TI datasheet for bit functions
    i2c.start(id)
@@ -70,7 +78,8 @@ function readAdcI(aN)
       return nil
    end
    ww=i2c.write(id, ap_reg_config)
-   ww=i2c.write(id, inputCode[aN+1]) -- conversion bit + 3 bits of mux addr
+   adcCode = bit.bor(inputCode[aN+1], gainCode[gN])
+   ww=i2c.write(id, adcCode) -- conversion bit + 3 bits of mux addr + gain setting
    ww=i2c.write(id, 0x83) -- just defaults plus single conversion
    i2c.stop(id)
    tmr.delay(10)
@@ -104,7 +113,7 @@ function readAdcI(aN)
    c = i2c.read(id, 2)
    i2c.stop(id)
    
-   return (2.048 * b2i(string.byte(c,1), string.byte(c,2)) / 32767) 
+   return (gainMult[gN] * b2i(string.byte(c,1), string.byte(c,2)) / 32767) 
 end
 
 
