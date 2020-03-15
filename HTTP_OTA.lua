@@ -6,9 +6,9 @@
 --
 -- http://dl.dropboxusercontent.com/s/3az2gndokyvbw2o/LFS.img?dl=0
 --
-local host, dir, image = "10.0.0.48", "/", "LFS.img"
---local host, dir, image = "dl.dropboxusercontent.com", "/s/3az2gndokyvbw2o/LFS.image?dl=", "LFS.img"
-local hostsocket = 8080
+-- local host, dir, image = "10.0.0.48", "/", "LFS.img"
+local host, dir, image = "prism-spectacles.s3.amazonaws.com", "/", "LFS.img"
+local hostsocket = 80
 local doRequest, firstRec, subsRec, finalise
 local n, total, size = 0, 0
   
@@ -60,7 +60,8 @@ firstRec = function (sck,rec)
 
    if size > 0 then
       sck:on("receive",subsRec)
-      file.open("DL-"..image, 'w')
+      print("about to open", image)
+      file.open(image, 'w')
       subsRec(sck, rec:sub(i+4))
    else
       sck:on("receive", nil)
@@ -81,19 +82,22 @@ subsRec = function(sck,rec)
 end
 
 finalise = function(sck)
-  file.close()
+   file.close()
+   print("file closed")
   sck:on("receive", nil)
   sck:close()
   local s = file.stat(image)
+  print("image:", image)
+  print("stat returns:", s)
   if (s and size == s.size) then
     wifi.setmode(wifi.NULLMODE)
     collectgarbage();collectgarbage()
     -- run as separate task to maximise RAM available
     print("")
     print("Preparing to flashreload:", image)
-    --node.task.post(function() node.flashreload(image) end)
+    node.task.post(function() node.flashreload(image) end)
   else
-    print"Invalid save of image file"
+     print("Invalid save of image file")
   end
 end
 
