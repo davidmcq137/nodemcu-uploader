@@ -18,8 +18,8 @@ ota = require "httpOTA"
 
 medidoEnabled = true 
 
-PIDpGain = 0.01
-PIDiGain = 4
+PIDpGain = 0.005
+PIDiGain = 2
 PIDpTerm = 0
 PIDiTerm = 0
 MINpress = 0
@@ -31,21 +31,26 @@ pulsePerOzEmpty = 100.0
 -- end globals
 
 local dispRstPin        = 0 --GPIO 16
-local flowDirPin        = 8 --GPIO 15
 local flowMeterPinFill  = 6 --GPIO 12
 local flowMeterPinEmpty = 7 --GPIO 13
 local flowMeterPinStop  = 5 --GPIO 14
-local pwmPumpPin        = 2 --GPIO 4
 local powerDownPin      = 1 --GPIO 5 also used to interrupt boot seq if held high on startup
 
+--[[ code for DRV8871
 local motorIn1Pin = 2 -- GPIO 4
 local motorIn2Pin = 8 -- GPIO 15
+--]]
+
+---[[ code for Pololu
+local pwmPumpPin        = 2 --GPIO 4
+local flowDirPin        = 8 --GPIO 15
+--]]
 
 local pulseCountFill=0
 local pulseCountEmpty=0
 local pulseCountStop=0
 local pulseCountBad=0
-local pulseStop = 10 -- set # pulses to stop pump on piss tank sensor
+local pulseStop = 10 -- set # pulses to stop pump on piss tank sensor @77 pulses/oz this is 3.5 ml 
 local flowRate=0
 local lastPulseCountFill=0
 local lastPulseCountEmpty=0
@@ -74,6 +79,9 @@ pumpTimer = 0
 watchTimer = 0
 powerOffTimer = 0
 powerOffMins = 30
+bootTime = 0
+adcZero = 10
+adcScale = 1068.97
 
 local dw=128
 local dh=64
@@ -145,7 +153,8 @@ function showLCD()
    disp:clearBuffer()
    for i = 1, 4, 1 do
       if textLCD[i] then
-	 cdisp(u8g2.font_profont17_mr, textLCD[i], 1,  (i-1)*15+io)
+	 --cdisp(u8g2.font_profont17_mr, textLCD[i], 1,  (i-1)*15+io)
+	 cdisp(u8g2.font_helvB12_tf, textLCD[i], 1,  (i-1)*15+io)	 
       end
    end
    disp:sendBuffer()
@@ -182,6 +191,8 @@ function setRunSpeed(pw) -- careful .. this is in pwm units 0 .. 1023 ..  not %
    lastPulseCountBad = 0
 
    sendSPI("rPWM", pw)
+
+   --[[ code for DRV8871
    if pumpFwd == true then
       pwm.setduty(motorIn2Pin, 0)
       pwm.setduty(motorIn1Pin, pw)
@@ -189,13 +200,17 @@ function setRunSpeed(pw) -- careful .. this is in pwm units 0 .. 1023 ..  not %
       pwm.setduty(motorIn1Pin, 0)
       pwm.setduty(motorIn2Pin, pw)
    end
-
+   --]]
+   
+   ---[[ code for Pololu 18v17
+   pwm.setduty(pwmPumpPin, pw)
+   --]]
+   
    runPWM = pw
 end
 
 oldspd = 0
 function setPumpSpeed(ps) -- this is ps units -- 0 to 100%
-   
    pumpPWM = math.floor(ps*opPWM/100)
    if pumpPWM < minPWM then pumpPWM = 0 end
    if pumpPWM > maxPWM then pumpPWM = maxPWM end
@@ -203,28 +218,48 @@ function setPumpSpeed(ps) -- this is ps units -- 0 to 100%
    if pumpPWM ~= oldspd then
       --print("pump speed set to", pumpPWM)
    end
-   if runPWM > 0 then
-      runPWM = pumpPWM
-      setRunSpeed(runPWM)
-   end
+   
+-- don't turn on pump yet .. just note the max speed pumpPWM   
+   --if runPWM > 0 then
+   --   runPWM = pumpPWM
+   --   setRunSpeed(runPWM) 
+   --end
+   
    oldspd = pumpPWM
 end
 
 function setPumpFwd()
+   --[[ code for DRV8871 
    pwm.setduty(motorIn1Pin, 0)
    pwm.setduty(motorIn2Pin, 0)
+   --]]
+
+   -- code for Pololu
+   gpio.write(flowDirPin, 0)
+   --
+   
    pumpFwd=true
-   PIDiTerm = saveSetSpeed
+   PIDiTerm = saveSetSpeed * minPWM / maxPWM -- setting to 1.0x saveSetSpeed caused overshoot
    pulseCountStop = 0 -- reset piss tank flow sensor
+   
    if pumpPWM > 0 then -- just turned on .. note startime
       pumpStartTime = tmr.now()
    end
-   setRunSpeed(pumpPWM)
+   --start the pump at min speed .. let the PID ramp it up
+   --setRunSpeed(pumpPWM)
+   setRunSpeed(math.min(pumpPWM, minPWM))
 end
 
 function setPumpRev()
+   --[[ code for DRV8871
    pwm.setduty(motorIn1Pin, 0)
    pwm.setduty(motorIn2Pin, 0)
+   --]]
+
+   -- code for Pololu
+   gpio.write(flowDirPin, 1)
+   --
+   
    pumpFwd=false
    PIDiTerm = 0
    pulseCountStop = 0 -- reset piss tank flow sensor
@@ -235,7 +270,7 @@ function setPumpRev()
 end
 
 function watchDog(T)
-
+   --"woof"
 end
 
 function powerCB(T)
@@ -267,24 +302,24 @@ function execCmd(k,v)
       --showLCD()
    elseif k == "Fill" then
       setPumpFwd()
-      --lineLCD()
-      --lineLCD(1, "Fill")
-      --lineLCD(2, "Set Spd ", saveSetSpeed, "%d", "%")
+      lineLCD()
+      lineLCD(1, "Fill")
+      --lineLCD(2, "Set Spd", saveSetSpeed, "%d", "%")
       --showLCD()
    elseif k == "Off" then
-      --print("pump stop")
+      print("pump stop")
       setRunSpeed(0)
       pumpStopTime = tmr.now()
-      --lineLCD(1, "Pump Off")
-      --lineLCD(2, "Set Spd ", saveSetSpeed, "%d", "%")
-      --lineLCD(3, "Vol ", flowCount, "%.1f", " oz")
+      lineLCD(1, "Pump Off")
+      --lineLCD(2, "Set Spd", saveSetSpeed, "%d", "%")
+      --lineLCD(3, "Vol", flowCount, "%.1f", " oz")
       --lineLCD(4, timeFmt(runningTime))
       --showLCD()
    elseif k == "Empty" then
       setPumpRev()
-      --lineLCD()
-      --lineLCD(1, "Empty")
-      --lineLCD(2, "Set Spd ", saveSetSpeed, "%d", "%")
+      lineLCD()
+      lineLCD(1, "Empty")
+      --lineLCD(2, "Set Spd", saveSetSpeed, "%d", "%")
       --showLCD()
    elseif k == "Clear" then
       pulseCountFill = 0
@@ -301,9 +336,10 @@ function execCmd(k,v)
       pumpStopTime=0
       sendSPI("rTIM", runningTime)
       --if textLCD[3] then
-	-- lineLCD(3, "Vol ", flowCount, "%.1f", " oz")
-	-- lineLCD(4, timeFmt(runningTime))
-	-- showLCD()
+      lineLCD(1, "Clear")
+	--lineLCD(3, "Vol", flowCount, "%.1f", " oz")
+	--lineLCD(4, timeFmt(runningTime))
+      --showLCD()
       --end
    elseif k == "CalF" then
       --print("CalFactFill passed in:", tonumber(v))
@@ -388,6 +424,10 @@ function uartCB(data)
    
 end
 
+local function adcVolts(vRaw)
+   return adcDiv * (vRaw - adcZero) / adcScale
+end
+
 
 local seq=0
 local adcAvg=0
@@ -410,11 +450,11 @@ function timerCB()
       pulseCountStop = 0
    end
    
-   adcAvg = adcAvg - (adcAvg-adc.read(0)) / 4.0 -- running avg of adc readings
-   pressPSI = ((adcDiv*adcAvg/1023)-pressZero) * (pressScale)
+   adcAvg = adcAvg - (adcAvg-adc.read(0)) / 4.0 -- running avg of raw (0-1023) adc readings
+   pressPSI = (adcVolts(adcAvg)-pressZero) * (pressScale)
    sendSPI("pPSI", pressPSI)
 
-   if pressPSI < 0 then pressPSI = 0 end
+   --if pressPSI < 0 then pressPSI = 0 end
       
    flowCount = (pulseCountFill / pulsePerOzFill) - (pulseCountEmpty / pulsePerOzEmpty)
 
@@ -470,10 +510,23 @@ function timerCB()
    end
    
    seq = seq + 1
+   if seq % 5 == 0 and (tmr.time() - bootTime > 5) then
+      --lineLCD(1, "Prs", pressPSI,  "%2.1f", " psi")
+      --lineLCD(2, "avg", adcVolts(adcAvg),    "%2.3f", " V")
+      --lineLCD(3, "adc", adcVolts(adc.read(0)), "%2.3f", " V")
+      lineLCD(2, "Flw", flowRate,  "%2.1f", " oz/s")
+      lineLCD(3, "Vol", flowCount, "%4.1f", " oz")
+      if runPWM == 0 then
+	 lineLCD(4, timeFmt(0))
+      else
+	 lineLCD(4, timeFmt(runningTime))
+      end
+      showLCD()
+   end
    if seq % 10 == 0 then
       sendSPI("Batt", ads.readAdc(0) or 0)
    end
-   if seq % 5 == 0 then
+   if seq % 10 == 6 then
       sendSPI("Curr", 100 * ((ads.readAdc(1, 4) or 0) - currentZero) )
    end
    
@@ -481,6 +534,8 @@ function timerCB()
 end
 
 -- Main prog and init seciton starts here
+
+bootTime = tmr.time()
 
 -- First init the UART to talk BLE to the app
 uart.setup(0, 9600, 8, uart.PARITY_NONE, uart.STOPBITS_1, 0)
@@ -499,11 +554,19 @@ i2c.setup(0, sda, scl, i2c.SLOW)
 
 -- Set up 1KHz pwm signal to drive pump
 
-pwm.setup(motorIn1Pin, 1000, 0)
-pwm.setduty(motorIn1Pin, 0)
+--[[ code for DRV8871
+   pwm.setup(motorIn1Pin, 1000, 0)
+   pwm.setduty(motorIn1Pin, 0)
+   
+   pwm.setup(motorIn2Pin, 1000, 0)
+   pwm.setduty(motorIn2Pin, 0)
+--]]
 
-pwm.setup(motorIn2Pin, 1000, 0)
-pwm.setduty(motorIn2Pin, 0)
+---[[ code for Pololu
+pwm.setup(pwmPumpPin, 1000, 0)
+pwm.setduty(pwmPumpPin, 0)
+gpio.mode(flowDirPin, gpio.OUTPUT)
+--]]
 
 -- Preset pump speed to 0, set FWD direction
 
@@ -520,11 +583,12 @@ currentZero = currentZero / 10.0
 
 -- Get a zero cal point on the pressure transducer
 
-pressZero = adcDiv * adc.read(0) / 1023
-
+local ar = 0
 for i=1,50,1 do
-   pressZero = pressZero - (pressZero - adcDiv * adc.read(0) / 1023)/10
+   ar = ar + adc.read(0)
 end
+
+pressZero = adcVolts(ar / 50)
 
 -- Set up the gpio interrupt to catch pulses from the flowmeters
 
@@ -544,11 +608,16 @@ gpio.write(powerDownPin, 0)
 
 -- Set up the OLED display panel and put up an initial screen
 
----init_i2c_display()
----disp:clearBuffer()
----io=2
----cdisp(u8g2.font_profont22_mr, "MedidoPump", 0, 0+io)
----cdisp(u8g2.font_profont17_mr, "BLE v1.0", 0, 20+io)
+gpio.mode(dispRstPin, gpio.OUTPUT)
+init_i2c_display()
+disp:clearBuffer()
+io=2
+cdisp(u8g2.font_profont22_mr, "MedidoPump", 0, 0+io)
+cdisp(u8g2.font_profont17_mr, "BLE v1.0", 0, 20+io)
+cdisp(u8g2.font_profont17_mr, string.format("p0:%2.3f V", pressZero), 0, 40+io)
+disp:sendBuffer()
+lineLCD(1, "Pump Ready")
+
 
 sendSPI("Init", 0)
 sendSPI("rPWM", 0)
