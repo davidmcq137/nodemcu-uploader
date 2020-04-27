@@ -613,8 +613,8 @@ init_i2c_display()
 disp:clearBuffer()
 io=2
 cdisp(u8g2.font_profont22_mr, "MedidoPump", 0, 0+io)
-cdisp(u8g2.font_profont17_mr, "BLE v1.0", 0, 20+io)
-cdisp(u8g2.font_profont17_mr, string.format("p0:%2.3f V", pressZero), 0, 40+io)
+cdisp(u8g2.font_profont17_mr, "BLE v3.0", 0, 20+io)
+-- cdisp(u8g2.font_profont17_mr, string.format("p0:%2.3f V", pressZero), 0, 40+io)
 disp:sendBuffer()
 lineLCD(1, "Pump Ready")
 
