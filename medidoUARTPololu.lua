@@ -274,8 +274,8 @@ function watchDog(T)
 end
 
 function powerCB(T)
-   print("Powering down .. timeout")
-   sendSPI("PowerDown")
+   -- print("Powering down .. timeout")
+   sendSPI("PowerDown") -- does the pump "live" long enough to get this to the app before power off?
    gpio.write(powerDownPin, 1)   
 end
 
